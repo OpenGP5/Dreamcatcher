@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.0, on OpenGP5 0.2.0-alpha.
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.0.1, on OpenGP5 0.2.1-alpha.
 The first full firmware made with the OpenGP5 platform: its own sound engine on the DSP, its own controls and
 screen on the control processor.
 
@@ -100,7 +100,7 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
 | `nds32/font_aa.h` | anti-aliased large text: Rubik SemiBold, made with OpenGP5's `tools/make_font.py` |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
-| `opengp5/` | the platform, a git submodule pinned to a tested release (0.2.0-alpha) |
+| `opengp5/` | the platform, a git submodule pinned to a tested release (0.2.1-alpha) |
 
 Two things learnt on the way, useful for any OpenGP5 firmware:
 
