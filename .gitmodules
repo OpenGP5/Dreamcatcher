@@ -1,0 +1,3 @@
+[submodule "opengp5"]
+	path = opengp5
+	url = https://github.com/OpenGP5/OpenGP5.git
