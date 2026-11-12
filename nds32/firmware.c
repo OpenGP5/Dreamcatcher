@@ -8,9 +8,15 @@
 static uint32_t pulse_ph;          /* LFO phase on this side, 0..9999, advanced every 10 ms */
 static unsigned pulse_age = 100;   /* 10 ms ticks since the last cycle started */
 
-void fw_init(void) { dc_ui_init(); }
-void fw_foot(void) { dc_ui_foot(); }                       /* catch / let go of a micro-loop */
-void fw_para_push(void) { dc_ui_push(); }                  /* effect on / off */
+#define STORE_ID 0x434D5244u                               /* "DRMC" */
+unsigned dc_persist_load(void *dst, unsigned max) { return gp5_store_load(STORE_ID, dst, max); }
+int dc_persist_save(const void *src, unsigned len) { return gp5_store_save(STORE_ID, src, len); }
+
+void fw_init(void) { dc_ui_init(); dc_ui_restore(); }       /* start on the last-used preset */
+void fw_foot(void) { dc_ui_foot_down(); }                  /* catch / let go of a micro-loop */
+void fw_foot_release(void) { dc_ui_foot_up(); }
+void fw_para_push(void) { dc_ui_para_down(); }             /* click: save / load a preset; hold 3 s: on / off */
+void fw_para_release(void) { dc_ui_para_up(); }
 void fw_para_turn(int detents) { dc_ui_turn(detents); }    /* choose the setting */
 unsigned fw_level(void) { return dc_ui_level(); }
 void fw_dsp_ready(void) { dc_ui_resend_all(); }
@@ -23,6 +29,7 @@ unsigned fw_active(void) { return dc_ui_on() ? GP5_LED(32, 2, 32) : 0; }
 void fw_knob(unsigned knob)
 {
     dc_ui_knob(knob);
+    dc_ui_tick();
     /* The pulse follows the RATE setting (not the DSP's glitch jumps): a flash at each cycle, then a fade. */
     pulse_ph += dc_ui_rate_x100();
     if (pulse_ph >= 10000u) { pulse_ph %= 10000u; pulse_age = 0; }
@@ -39,7 +46,7 @@ int fw_draw(unsigned knob, int force)
     dc_ui_value(s.value);
     s.frac = (uint8_t)dc_ui_frac();
     s.knob = (uint8_t)knob;
-    s.live = (uint8_t)dc_ui_live();
+    s.live = (uint8_t)(dc_ui_live() || dc_ui_overlay());     /* gold while saving, too */
     s.on = (uint8_t)dc_ui_on();
     s.caught = (uint8_t)dc_ui_caught();
     s.sel = (uint8_t)dc_ui_sel();

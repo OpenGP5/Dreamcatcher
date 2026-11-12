@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).**
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.0, on OpenGP5 0.2.0-alpha.
 The first full firmware made with the OpenGP5 platform: its own sound engine on the DSP, its own controls and
 screen on the control processor.
 
@@ -27,8 +27,9 @@ and filters them. The loop can be routed into the wet channel, so the two halves
 |---|---|
 | turn PARA | choose a setting (the screen shows its section and value) |
 | volume knob | changes the chosen setting once turned a little (the value turns gold while it follows) |
-| foot switch | catch a micro-loop / let it go and listen again (also switches the effect on) |
-| push PARA | effect on / off (off lets go of the loop; the output is the exact dry signal) |
+| foot switch | catch a micro-loop / let it go and listen again (the looper only) |
+| click PARA | save the current sound into the active preset (`SAVED P3`). On PRESET with another slot highlighted by the volume knob (`LOAD P3`): load that slot, or, if it is empty, save the sound there |
+| hold PARA 3 s | effect on / off (`OFF IN` counts down after 1 s). The looper is left alone: a caught loop stays caught, and is heard again when the effect is back on. While off, the output is the exact dry signal |
 
 The LEDs glow violet when Dreamcatcher is on and dim red when it is off. The dot in the screen's header pulses at the LFO rate, like a "moment
 of chance" light.
@@ -37,7 +38,8 @@ of chance" light.
 
 | section | setting | range |
 |---|---|---|
-| MAIN | MIX | dry only … both full (middle) … wet only |
+| MAIN | PRESET | slot 1 … 8, highlighted with the knob, loaded with a click of PARA; a bumped knob never changes the sound (`P3` = active, `P3*` = changed since saved, `LOAD P3` = highlighted, `3 EMPTY` = nothing saved). A preset holds every setting and VOLUME, not on / off or a caught loop. The pedal starts on the last slot you loaded or saved |
+| | MIX | dry only … both full (middle) … wet only |
 | | CLOCK | 1.4 kHz … 44 kHz in musical steps. The engine rate of both halves: lower = longer loops and delays, more grit. Changing it while a loop plays shifts the loop's pitch in harmonised steps |
 | | VOLUME | output level |
 | WET | TIME | delay time, 4 ms … 555 ms at 44 kHz (longer at lower CLOCK) |
@@ -92,11 +94,11 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `params.h` | the 19 settings both processors share (link command `0x7F10 [id][value]`) |
 | `dsp/dream.h` | the sound engine (plain C, float; also runs on the computer) |
 | `dsp/firmware.h` | connects it to the OpenGP5 DSP platform |
-| `nds32/controls.c` | the controls, settings and their value texts |
+| `nds32/controls.c` | the controls, settings, value texts and presets (stored with OpenGP5's `gp5_store_save`) |
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
-| `nds32/font_aa.h` | anti-aliased large text: Rubik SemiBold, made with `tools/make_font.py` |
+| `nds32/font_aa.h` | anti-aliased large text: Rubik SemiBold, made with OpenGP5's `tools/make_font.py` |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
-| `opengp5/` | the platform, a git submodule pinned to a tested commit |
+| `opengp5/` | the platform, a git submodule pinned to a tested release (0.2.0-alpha) |
 
 Two things learnt on the way, useful for any OpenGP5 firmware:
 
@@ -104,7 +106,7 @@ Two things learnt on the way, useful for any OpenGP5 firmware:
   loop measured 110 % load from flash and about 42 % after `dsp/dream.h` put it in RAM (the `DC_HOT` macros:
   section `.data_hot`, copied to RAM at start-up with `.data`).
 - **Large text** looks much better as pre-rendered anti-aliased glyphs than as a scaled-up pixel font:
-  `tools/make_font.py FONT.ttf font_aa.h NAME:CAP_HEIGHT[:SPACING] ... --notice "..."` (needs Pillow).
+  `opengp5/tools/make_font.py FONT.ttf font_aa.h NAME:CAP_HEIGHT[:SPACING] ... --notice "..."` (needs Pillow).
 
 ## Licence
 

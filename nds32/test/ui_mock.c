@@ -44,22 +44,30 @@ static void chunk(FILE *f, const char *t, const uint8_t *d, uint32_t n)
 
 static void knob_to(unsigned v) { fw_knob(v); fw_knob(v); }
 static void turn_to(unsigned item) { while (dc_ui_sel() != item) fw_para_turn(1); }
+static void ticks(unsigned n, unsigned knob) { while (n--) fw_knob(knob); }
+
+/* the platform's store, in memory */
+static uint8_t store[GP5_STORE_MAX]; static unsigned store_len;
+unsigned gp5_store_load(uint32_t id, void *dst, unsigned max)
+{ (void)id; memcpy(dst, store, store_len < max ? store_len : max); return store_len; }
+int gp5_store_save(uint32_t id, const void *src, unsigned len) { (void)id; memcpy(store, src, len); store_len = len; return 0; }
 
 int main(int argc, char **argv)
 {
     fw_init();
-    knob_to(200);
-    shot(200);                                          /* on, MIX chosen, knob waiting */
-    fw_knob(150); shot(150);                            /* MIX follows the knob (gold) */
-    turn_to(3); knob_to(150); fw_knob(210); shot(210);  /* TIME */
-    turn_to(5); knob_to(210); fw_knob(90); shot(90);    /* CHANCE below noon */
-    turn_to(7); for (int i = 0; i < 300; i++) fw_knob(90); shot(90);   /* RATE, pulse fading */
-    turn_to(9); shot(90);                               /* SHAPE, waiting */
-    turn_to(11); knob_to(90); fw_knob(230); shot(230);  /* DISSOLVE reverse */
-    turn_to(12); knob_to(230); fw_knob(60); shot(60);   /* FILTER low-pass */
-    fw_foot(); turn_to(15); shot(60);                   /* loop caught, SPEED */
-    turn_to(13); knob_to(60); fw_knob(240); turn_to(15); knob_to(240); fw_knob(100); shot(100);  /* STRETCH, DRIFT */
-    fw_para_push(); turn_to(1); shot(100);              /* off, CLOCK */
+    knob_to(200); shot(200);                            /* start: PRESET, slot 1 empty */
+    fw_para_push(); ticks(5, 200); fw_para_release(); ticks(5, 200); shot(200);   /* click: SAVED P1 */
+    turn_to(1); knob_to(200); fw_knob(150); shot(150);  /* MIX follows the knob (gold) */
+    turn_to(0); ticks(200, 150); shot(150);             /* PRESET again: P1* (changed since saved) */
+    knob_to(150); fw_knob(60); ticks(5, 60); fw_para_push(); ticks(5, 60); fw_para_release(); ticks(160, 60);  /* slot 2 */
+    fw_knob(10); ticks(5, 10); shot(10);                /* knob highlights slot 1: LOAD P1 (a click loads it) */
+    turn_to(4); knob_to(150); fw_knob(210); shot(210);  /* TIME */
+    turn_to(8); ticks(300, 210); shot(210);             /* RATE, pulse fading */
+    turn_to(12); knob_to(90); fw_knob(230); shot(230);  /* DISSOLVE reverse */
+    fw_foot(); ticks(5, 230); fw_foot_release(); ticks(5, 230); turn_to(16); shot(230);   /* loop caught, SPEED */
+    turn_to(14); knob_to(60); fw_knob(240); turn_to(16); knob_to(240); fw_knob(100); shot(100);  /* STRETCH, DRIFT */
+    fw_para_push(); ticks(160, 100); shot(100);         /* holding PARA: OFF IN, countdown */
+    ticks(150, 100); fw_para_release(); ticks(5, 100); turn_to(2); shot(100);   /* off (loop still caught); CLOCK */
 
     int rows = (nshots + COLS - 1) / COLS, sw = COLS * (W * K + PAD) + PAD, sh = rows * (H * K + PAD) + PAD;
     static uint8_t img[(COLS * (W * K + PAD) + PAD) * 3 * ((MAXSHOTS / COLS) * (H * K + PAD) + PAD)];
