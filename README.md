@@ -4,7 +4,7 @@
 The first full firmware made with the OpenGP5 platform: its own sound engine on the DSP, its own controls and
 screen on the control processor.
 
-![Dreamcatcher's screens](docs/screens.png)
+![A Valeton GP-5 running Dreamcatcher: the screen shows CLOCK 8.3K, the foot switch glows violet](docs/pedal.jpg)
 
 Dreamcatcher is inspired by two pedals: the Chase Bliss **MOOD MKII** (an always-listening micro-looper and a
 CLOCK that sets the sample rate of everything) and the Old Blood Noise Endeavors **Parting** (moments of chance
@@ -33,6 +33,8 @@ and filters them. The loop can be routed into the wet channel, so the two halves
 
 The LEDs glow violet when Dreamcatcher is on and dim red when it is off. The dot in the screen's header pulses at the LFO rate, like a "moment
 of chance" light.
+
+![Four of Dreamcatcher's screens: a preset highlighted to load, TIME, DISSOLVE and the looper's DRIFT](docs/screens.png)
 
 ## Settings
 
@@ -80,7 +82,7 @@ the test unit (100 % = one 64-sample block's time).
 Without a pedal:
 
 ```
-./test.sh                                                          # sound engine + screen checks, build/screens.png
+./test.sh                                                          # sound engine + screen checks, build/screens.png (all screens)
 python3 opengp5/tools/run_effect.py . x out.wav --tone --set 10=240  # hear it: a plucked tone through Dreamcatcher
 python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built DSP code in an emulator
 ```

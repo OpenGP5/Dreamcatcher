@@ -1,6 +1,9 @@
 /* Screen mock-ups on the computer: the real controls.c + ui.c + firmware.c render states into a PNG sheet.
- * Run by ./test.sh (writes build/screens.png). Needs zlib. */
+ * Run by ./test.sh (writes build/screens.png). Needs zlib.
+ *   ui_mock out.png [n ...]   only screens n (0-based, in the order below); the README's docs/screens.png is
+ *                             build/ui_mock docs/screens.png 4 5 7 9 */
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <zlib.h>
@@ -69,6 +72,10 @@ int main(int argc, char **argv)
     fw_para_push(); ticks(160, 100); shot(100);         /* holding PARA: OFF IN, countdown */
     ticks(150, 100); fw_para_release(); ticks(5, 100); turn_to(2); shot(100);   /* off (loop still caught); CLOCK */
 
+    int pickn = 0, pick[MAXSHOTS];
+    for (int a = 2; a < argc && pickn < MAXSHOTS; a++) { int v = atoi(argv[a]); if (v >= 0 && v < nshots) pick[pickn++] = v; }
+    if (!pickn) for (int n = 0; n < nshots; n++) pick[pickn++] = n;
+    nshots = pickn;
     int rows = (nshots + COLS - 1) / COLS, sw = COLS * (W * K + PAD) + PAD, sh = rows * (H * K + PAD) + PAD;
     static uint8_t img[(COLS * (W * K + PAD) + PAD) * 3 * ((MAXSHOTS / COLS) * (H * K + PAD) + PAD)];
     static uint8_t raw[sizeof img + 4096];
@@ -76,7 +83,7 @@ int main(int argc, char **argv)
     for (int n = 0; n < nshots; n++) {
         int ox = PAD + (n % COLS) * (W * K + PAD), oy = PAD + (n / COLS) * (H * K + PAD);
         for (int y = 0; y < H * K; y++) for (int x = 0; x < W * K; x++)
-            memcpy(img + 3 * ((oy + y) * sw + ox + x), shots[n] + 3 * ((y / K) * W + x / K), 3);
+            memcpy(img + 3 * ((oy + y) * sw + ox + x), shots[pick[n]] + 3 * ((y / K) * W + x / K), 3);
     }
     uLong rn = 0;
     for (int y = 0; y < sh; y++) { raw[rn++] = 0; memcpy(raw + rn, img + 3 * y * sw, 3 * sw); rn += 3 * sw; }
