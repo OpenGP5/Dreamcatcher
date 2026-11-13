@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.0.1, on OpenGP5 0.2.1-alpha.
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.1.0, on OpenGP5 0.3.0-alpha.
 The first full firmware made with the OpenGP5 platform: its own sound engine on the DSP, its own controls and
 screen on the control processor.
 
@@ -98,19 +98,19 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `dsp/firmware.h` | connects it to the OpenGP5 DSP platform |
 | `nds32/controls.c` | the controls, settings, value texts and presets (stored with OpenGP5's `gp5_store_save`) |
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
-| `nds32/font_aa.h` | anti-aliased large text: Rubik SemiBold, made with OpenGP5's `tools/make_font.py` |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
-| `opengp5/` | the platform, a git submodule pinned to a tested release (0.2.1-alpha) |
+| `opengp5/` | the platform, a git submodule pinned to a tested release (0.3.0-alpha) |
 
 Two things learnt on the way, useful for any OpenGP5 firmware:
 
 - **Big per-sample loops belong in RAM.** The DSP runs code straight from SPI flash. Dreamcatcher's 5 KB audio
   loop measured 110 % load from flash and about 42 % after `dsp/dream.h` put it in RAM (the `DC_HOT` macros:
   section `.data_hot`, copied to RAM at start-up with `.data`).
-- **Large text** looks much better as pre-rendered anti-aliased glyphs than as a scaled-up pixel font:
-  `opengp5/tools/make_font.py FONT.ttf font_aa.h NAME:CAP_HEIGHT[:SPACING] ... --notice "..."` (needs Pillow).
+- **Large text** looks much better smooth (anti-aliased) than as a scaled-up pixel font. Dreamcatcher uses the
+  platform's own `gp5_draw_text` with its "sans" font, Atkinson Hyperlegible Next (`opengp5/docs/platform/fonts.md`);
+  any other font is one `opengp5/tools/make_font.py` away.
 
 ## Licence
 
-MIT (`LICENSE`), except the font tables in `nds32/font_aa.h`, which are made from Rubik (Copyright 2015 The Rubik
-Project Authors) and are under the SIL Open Font License 1.1 (`LICENSE-Rubik-OFL.txt`).
+MIT (`LICENSE`). The screen's lettering comes from OpenGP5 (Atkinson Hyperlegible Next, SIL Open Font License
+1.1, in `opengp5/platform/nds32/fonts/`).

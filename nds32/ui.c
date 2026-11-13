@@ -1,6 +1,8 @@
 #include "ui.h"
 #include "font5x7.h"
-#include "font_aa.h"
+#include "gp5_font.h"
+#include "fonts/sans_16.h"
+#include "fonts/sans_24.h"
 
 /* Pixel format: the pedal's panel is BGR 5-6-5, high byte first (UI_PANEL); the computer gets RGB 5-6-5. */
 #ifdef UI_PANEL
@@ -67,41 +69,21 @@ static void text(int x, int y, const char *s, int k, uint16_t c)
 {
     for (; *s; s++, x += 6 * k) {
         unsigned ch = (unsigned char)*s, col, row;
-        if (ch < 0x20 || ch > 0x5A) ch = '?';
+        if (ch < 0x20 || ch > GP5_FONT5X7_LAST) ch = '?';
         for (col = 0; col < 5; col++)
             for (row = 0; row < 7; row++)
                 if ((font[ch - 0x20][col] >> row) & 1) rect(x + (int)col * k, y + (int)row * k, k, k, c);
     }
 }
-/* Large text: anti-aliased glyphs (font_aa.h, made by tools/make_font.py), blended into the background. */
-static const font_glyph_t *aa_glyph(const font_t *f, char c)
+/* Large text: the platform's smooth "sans" font (OpenGP5 gp5_font.h), blended into the band. Placed by baseline:
+ * gp5_draw_text takes the top of the line, relative to the band. */
+#define NAME_FONT  (&gp5_font_sans_16)
+#define VALUE_FONT (&gp5_font_sans_24)
+static int aa_width(const gp5_font_t *f, const char *s) { return gp5_text_width(f, s); }
+static void aa_text(int x, int baseline, const char *s, const gp5_font_t *f, rgb_t fg)
 {
-    const char *k = FONT_CHARS;
-    unsigned i;
-    for (i = 0; k[i]; i++) if (k[i] == c) return &f->g[i];
-    return &f->g[0];                                         /* unknown: a space */
-}
-static int aa_width(const font_t *f, const char *s)
-{
-    int w = 0;
-    for (; *s; s++) w += aa_glyph(f, *s)->adv;
-    return w;
-}
-static void aa_text(int x, int y, const char *s, const font_t *f, rgb_t fg)
-{
-    uint16_t shade[16];
-    unsigned a;
-    for (a = 0; a < 16; a++) shade[a] = c16(mixc(BG, fg, a, 15));
-    for (; *s; s++) {
-        const font_glyph_t *g = aa_glyph(f, *s);
-        unsigned i, j, n = g->w * f->h;
-        for (j = 0; j < n; j++) {
-            unsigned b = f->data[g->off + j / 2], v = j & 1 ? b & 15u : b >> 4;
-            i = j % g->w;
-            if (v) px(x + g->left + (int)i, y + (int)(j / g->w), shade[v]);
-        }
-        x += g->adv;
-    }
+    gp5_draw_text(band, bw, bh, x - (int)bx0, baseline - (int)f->base - (int)by0, f, s,
+                  ((uint32_t)fg.r << 16) | ((uint32_t)fg.g << 8) | fg.b);
 }
 
 static void begin(unsigned x0, unsigned y0, unsigned w, unsigned h)
@@ -177,7 +159,7 @@ int ui_draw(const ui_state_t *s, int force)
         begin(0, 15, UI_W, 17);
         pill(6, 18, w, 11, 5, c16(s->on ? accent : FAINT));
         text(10, 20, s->sec_name, 1, c16(s->on ? BG : DIM));
-        aa_text(6 + w + 6, 16, s->name, &font_name, s->on ? TEXT : DIM);
+        aa_text(6 + w + 6, 28, s->name, NAME_FONT, s->on ? TEXT : DIM);
         send();
         return 1;
     }
@@ -187,9 +169,9 @@ int ui_draw(const ui_state_t *s, int force)
     if (!valid[2] || h != last[2]) {
         last[2] = h; valid[2] = 1;
         begin(0, 32, UI_W, 25);
-        x = 154 - aa_width(&font_value, s->value);
+        x = 154 - aa_width(VALUE_FONT, s->value);
         if (x >= 12) rect(6, 35, 2, 19, c16(s->on ? accent : FAINT));    /* section stripe, when the value leaves room */
-        aa_text(x, 33, s->value, &font_value, s->live ? LIVE : (s->on ? TEXT : DIM));
+        aa_text(x, 52, s->value, VALUE_FONT, s->live ? LIVE : (s->on ? TEXT : DIM));
         send();
         return 1;
     }
@@ -206,7 +188,6 @@ int ui_draw(const ui_state_t *s, int force)
             uint16_t c = c16(s->live ? LIVE : (s->on ? mixc(VIOLET, PINK, (unsigned)x, 147) : DIM));
             for (j = 0; j < 6; j++) if (in_pill(x, j, fill, 6, 3)) px(6 + x, 59 + j, c);
         }
-        if (s->on && !s->live && fill > 8) px(6 + fill - 3, 60, c16(TEXT));   /* a glint at the tip */
         if (!s->live) { rect(kx - 1, 67, 3, 1, c16(DIM)); rect(kx, 66, 1, 1, c16(DIM)); }
         send();
         return 1;
