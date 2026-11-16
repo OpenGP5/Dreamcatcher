@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.2.0, on OpenGP5 0.5.4-alpha.
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.2.0, on OpenGP5 0.5.5-alpha.
 The first full firmware made with the OpenGP5 platform, and the first to use both of the pedal's processors for
 sound: the engine runs on the control processor (with its controls and screen), the DSP keeps the dry signal and
 the final mix.
@@ -118,7 +118,7 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `nds32/controls.c` | the controls, settings, value texts and presets (stored with OpenGP5's `gp5_store_save`) |
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
-| `opengp5/` | the platform, a git submodule pinned to a tested release (0.5.4-alpha) |
+| `opengp5/` | the platform, a git submodule pinned to a tested release (0.5.5-alpha) |
 
 Every setting can also be changed live from a computer over USB (OpenGP5 0.5.4: `7E 10` sets one, `7E 11` reads
 them; the ids are in `params.h`, with `DC_P_*` for VOLUME, loading and saving presets). Presets made
