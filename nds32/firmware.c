@@ -33,6 +33,9 @@ int fw_take(uint32_t *id, uint32_t *value)
     return 1;
 }
 unsigned fw_setting_count(void) { return DC_NPARAM; }
+/* live access from the computer (OpenGP5 0.5.4, USB 7E 10 / 7E 11): params.h, DC_P_* */
+int fw_param_get(uint32_t id, uint32_t *value) { return dc_ui_param_get(id, value); }
+int fw_param_set(uint32_t id, uint32_t value) { return dc_ui_param_set(id, value); }
 /* LEDs: magenta-violet when on (red and blue full, a touch of green: the LEDs' blue is strong, so the
  * screen's violet linearised looked blue on the pedal); dim red when off. */
 unsigned fw_active(void) { return dc_ui_on() ? GP5_LED(32, 2, 32) : 0; }

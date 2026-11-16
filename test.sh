@@ -7,6 +7,8 @@ P=opengp5/platform
 mkdir -p build
 cc -O2 -std=c99 -Wall -Wextra -fno-builtin -fsanitize=address,undefined -I $P/dsp dsp/test/dream_host.c $P/dsp/gp5_math.c \
    -o build/dream_host
+cc -O2 -std=c99 -Wall -Wextra -fno-builtin -fsanitize=address,undefined -I $P/dsp dsp/test/hall_test.c $P/dsp/gp5_math.c -o build/hall_test
+build/hall_test
 build/dream_host
 cc -std=c99 -O1 -Wall -Wextra -fsanitize=address,undefined -I $P/nds32 -I nds32 nds32/test/ui_mock.c nds32/controls.c $P/nds32/text.c \
    nds32/ui.c nds32/firmware.c -lz -o build/ui_mock

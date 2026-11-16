@@ -17,7 +17,7 @@
  */
 #define DC_SLOTS 8
 
-enum { SEC_MAIN, SEC_WET, SEC_GRAIN, SEC_MOD, SEC_COLOR, SEC_LOOP, SEC_N };
+enum { SEC_MAIN, SEC_WET, SEC_GRAIN, SEC_MOD, SEC_COLOR, SEC_LOOP, SEC_VERB, SEC_N };
 
 void dc_ui_init(void);
 void dc_ui_turn(int detents);
@@ -31,7 +31,9 @@ extern unsigned dc_persist_load(void *dst, unsigned max);
 extern int dc_persist_save(const void *src, unsigned len);
 void dc_ui_knob(unsigned knob);                 /* 0..255, every 10 ms */
 void dc_ui_resend_all(void);
-int dc_ui_take(uint32_t *id, uint32_t *value);  /* next setting for the DSP; 0 = none */
+int dc_ui_take(uint32_t *id, uint32_t *value);
+int dc_ui_param_get(uint32_t id, uint32_t *value);   /* live access from the computer (params.h, DC_P_*): 1 = known */
+int dc_ui_param_set(uint32_t id, uint32_t value);    /* 1 = taken */  /* next setting for the DSP; 0 = none */
 unsigned dc_ui_level(void);                     /* output level 0..255 */
 
 unsigned dc_ui_on(void);

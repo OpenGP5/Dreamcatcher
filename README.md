@@ -68,6 +68,12 @@ of chance" light.
 | | LOOP LV | level of the loop itself |
 | | FADE | overdub: how much of the loop stays each pass, `REPLACE` … 100 % |
 | | ROUTE | what the wet channel processes: IN (the guitar; loop in parallel), IN+LOOP, LOOP (the loop while it plays) |
+| REVERB | DECAY | 0.3 s … 27 s; at the top `HOLD`: the tail sustains and new playing doesn't enter |
+| | MIX | none … the reverb on top of the effect (middle) … the reverb alone. It reverberates the wet channel and the loop; the dry guitar stays dry |
+| | SIZE | room … big hall (turning it glides, like tape) |
+| | PRE-DLY | 0 … 200 ms before the reverb starts |
+| | MOD | slow drift in the tail |
+| | SHIMMER | an octave-up copy of the tail fed back in |
 
 A good start: catch a chord, set ROUTE to IN+LOOP, turn SMEAR up and CHANCE a little above noon, then roll
 CLOCK down and play over it.
@@ -107,12 +113,21 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `dsp/link_words.h` | the audio link's words: the guitar to the control processor, the effect's share back |
 | `dsp/firmware.h` | the DSP half: sends the guitar, mixes what comes back with the dry signal, exact bypass |
 | `nds32/engine.c` | runs the engine in the audio link's interrupt, once per block; settings arrive between blocks |
+| `dsp/hall.h` | the hall reverb: an 8-line feedback delay network at half rate, on the DSP |
 | `nds32/controls.c` | the controls, settings, value texts and presets (stored with OpenGP5's `gp5_store_save`) |
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
 | `opengp5/` | the platform, a git submodule pinned to a tested release (0.3.0-alpha) |
 
+Every setting can also be changed live from a computer: OpenGP5 Launchpad's Presets page shows them all in the pedal's sections
+(OpenGP5 0.5.4: USB `7E 10` / `7E 11`; the ids are in `params.h`, `DC_P_*` for VOLUME, presets and saving). Presets made
+with 1.0, 1.1 or earlier 1.2 builds load with the reverb off, so they sound as they were saved.
+
 Things learnt on the way, useful for any OpenGP5 firmware:
+
+- **The DSP runs about 4-5 cycles per instruction** (measured: 32 cycles for a trivial loop step; its large and small RAM
+  are equally fast). A full-rate 8-line reverb took more than the whole DSP; at half rate, with per-block updates, it
+  takes about 36 % (`dsp/hall.h`).
 
 - **The control processor is the faster one for float code.** The whole engine at its heaviest (grains pitched,
   reversed and stuttered, full smear, GLITCH doubling the clock, overdub) took 106-108 % of the DSP and 64 % of

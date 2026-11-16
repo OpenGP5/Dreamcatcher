@@ -5,7 +5,8 @@
 #define ID_PRESET 254u
 enum { I_PRESET, I_MIX, I_CLOCK, I_VOLUME, I_TIME, I_SMEAR, I_TONE, I_CHANCE, I_GLITCH,
        I_GRAIN, I_PITCH, I_SCALE, I_REVERSE, I_STUTTER, I_RATE, I_DEPTH, I_SHAPE, I_MOD,
-       I_DISSOLVE, I_FILTER, I_LMODE, I_LENGTH, I_MOTION, I_LOOPLV, I_FADE, I_ROUTE, I_N };
+       I_DISSOLVE, I_FILTER, I_LMODE, I_LENGTH, I_MOTION, I_LOOPLV, I_FADE, I_ROUTE,
+       I_RDECAY, I_RMIX, I_RSIZE, I_RPREDLY, I_RMOD, I_RSHIMMER, I_N };
 
 static const struct { const char *name; uint8_t sec, id; uint16_t n; } item[I_N] = {
     { "PRESET",   SEC_MAIN,  ID_PRESET,   DC_SLOTS },
@@ -34,16 +35,24 @@ static const struct { const char *name; uint8_t sec, id; uint16_t n; } item[I_N]
     { "LOOP LV",  SEC_LOOP,  DC_LOOPLV,   256 },
     { "FADE",     SEC_LOOP,  DC_FADE,     256 },
     { "ROUTE",    SEC_LOOP,  DC_ROUTE,    3 },
+    { "DECAY",    SEC_VERB,  DC_RDECAY,   256 },
+    { "MIX",      SEC_VERB,  DC_RMIX,     256 },
+    { "SIZE",     SEC_VERB,  DC_RSIZE,    256 },
+    { "PRE-DLY",  SEC_VERB,  DC_RPREDLY,  256 },
+    { "MOD",      SEC_VERB,  DC_RMOD,     256 },
+    { "SHIMMER",  SEC_VERB,  DC_RSHIMMER, 256 },
 };
-static const char *const sec_name[SEC_N] = { "MAIN", "WET", "GRAIN", "MOD", "COLOR", "LOOP" };
+static const char *const sec_name[SEC_N] = { "MAIN", "WET", "GRAIN", "MOD", "COLOR", "LOOP", "REVERB" };
 
 static uint32_t val[DC_NPARAM];
-static unsigned volume, sel, live, have_knob, knob_ref, last_knob;
-static uint32_t dirty;                       /* bit = DSP parameter id */
+static unsigned volume, sel, live, have_knob, knob_ref, last_knob, knob_now;
+static uint64_t dirty;                       /* bit = DSP parameter id (more than 32 of them) */
 
-/* presets: what is stored (dc_persist_*), version 2 (1.2: 28 settings; version 1 had 19, migrated on load) */
+/* presets: what is stored (dc_persist_*), version 3 (1.2 with the reverb: 34 settings). Older ones are migrated on
+ * load: version 1 (1.0 / 1.1) had 19 settings, version 2 (1.2 before the reverb) 28. */
 #define SNAP (DC_NPARAM + 1u)                /* every setting's value, then VOLUME */
 #define V1_N 19u                             /* settings in a version 1 slot */
+#define V2_N 28u                             /* settings in a version 2 slot */
 static struct { uint8_t version, last, used, spare; uint8_t slot[DC_SLOTS][SNAP]; } st;
 static unsigned preset, hl;                  /* the loaded slot; the slot PRESET highlights */
 static unsigned saved_ticks, save_err, loaded;   /* the message after a click: SAVED / LOADED, for saved_ticks */
@@ -65,7 +74,7 @@ static unsigned foot_mode;                   /* 0 up; 1 pressed while listening;
 
 static void set(unsigned id, uint32_t v)
 {
-    if (val[id] != v) { val[id] = v; dirty |= 1u << id; }
+    if (val[id] != v) { val[id] = v; dirty |= 1ull << id; }
 }
 
 void dc_ui_init(void)
@@ -75,7 +84,7 @@ void dc_ui_init(void)
     for (i = 0; i < DC_NPARAM; i++) val[i] = def[i];
     volume = 255; sel = I_PRESET; live = have_knob = knob_ref = last_knob = 0; dirty = 0;
     for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = 0;
-    st.version = 2; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
+    st.version = 3; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
     for (i = 0; i < sizeof para; i++) { ((uint8_t *)&para)[i] = 0; ((uint8_t *)&foot)[i] = 0; }
     para.since_up = foot.since_up = DEBOUNCE;
 }
@@ -111,16 +120,20 @@ void dc_ui_restore(void)
     static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
     uint8_t b[sizeof st];
     unsigned i, k, n = dc_persist_load(b, sizeof b);
-    if (n == sizeof st && b[0] == 2) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
-    else if (n == 4u + DC_SLOTS * (V1_N + 1u) && b[0] == 1) {           /* 1.0 / 1.1 presets: new settings at defaults */
+    unsigned old = 0;                                                    /* settings in the stored version's slots */
+    if (n == sizeof st && b[0] == 3) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
+    else if (n == 4u + DC_SLOTS * (V2_N + 1u) && b[0] == 2) old = V2_N;  /* 1.2 before the reverb */
+    else if (n == 4u + DC_SLOTS * (V1_N + 1u) && b[0] == 1) old = V1_N;  /* 1.0 / 1.1 */
+    else return;                                                         /* nothing (valid) stored yet */
+    if (old) {                               /* new settings at their defaults, except: no reverb (they sound as saved) */
         for (i = 0; i < 4; i++) ((uint8_t *)&st)[i] = b[i];
-        st.version = 2;
+        st.version = 3;
         for (k = 0; k < DC_SLOTS; k++) {
-            const uint8_t *o = b + 4 + k * (V1_N + 1u);
-            for (i = 0; i < DC_NPARAM; i++) st.slot[k][i] = (uint8_t)(i < V1_N ? o[i] : def[i]);
-            st.slot[k][DC_NPARAM] = o[V1_N];
+            const uint8_t *o = b + 4 + k * (old + 1u);
+            for (i = 0; i < DC_NPARAM; i++) st.slot[k][i] = (uint8_t)(i < old ? o[i] : i == DC_RMIX ? 0u : def[i]);
+            st.slot[k][DC_NPARAM] = o[old];
         }
-    } else return;                                                       /* nothing (valid) stored yet */
+    }
     preset = hl = st.last < DC_SLOTS ? st.last : 0;
     if (st.used & (1u << preset)) apply(st.slot[preset]);
 }
@@ -144,7 +157,7 @@ static void save_preset(unsigned p)
     saved_ticks = 150; loaded = 0;
 }
 
-void dc_ui_resend_all(void) { dirty = (1u << DC_NPARAM) - 1u; }
+void dc_ui_resend_all(void) { dirty = (1ull << DC_NPARAM) - 1u; }
 
 void dc_ui_turn(int detents)
 {
@@ -233,6 +246,7 @@ void dc_ui_knob(unsigned knob)
     unsigned v, n = item[sel].n;
     int d;
     if (knob > 255u) knob = 255u;
+    knob_now = knob;
     if (!have_knob) { have_knob = 1; knob_ref = last_knob = knob; return; }
     if (!live) {
         d = (int)knob - (int)knob_ref;
@@ -247,6 +261,48 @@ void dc_ui_knob(unsigned knob)
     else set(item[sel].id, v);
 }
 
+/* Live access from the computer (OpenGP5 Launchpad). A change to the setting the screen shows lets go of the knob:
+ * it takes over again once turned, as after choosing a setting with PARA. */
+int dc_ui_param_get(uint32_t id, uint32_t *value)
+{
+    if (id < DC_NPARAM) { *value = val[id]; return 1; }
+    switch (id) {
+    case DC_P_VOLUME: *value = volume; return 1;
+    case DC_P_PRESET: *value = preset; return 1;
+    case DC_P_USED: *value = st.used; return 1;
+    case DC_P_CHANGED: *value = (uint32_t)changed(); return 1;
+    case DC_P_SAVE: *value = 0; return 1;
+    default: return 0;
+    }
+}
+
+int dc_ui_param_set(uint32_t id, uint32_t v)
+{
+    static const uint8_t max[DC_NPARAM] = DC_MAXES;
+    if (id < DC_NPARAM) {
+        if (id == DC_CATCH || id == DC_FREEZE || id == DC_OVERDUB) return 0;      /* the foot's */
+        set(id, v > max[id] ? max[id] : v);
+        if (item[sel].id == id) { live = 0; knob_ref = knob_now; }
+        saved_ticks = 0;
+        return 1;
+    }
+    switch (id) {
+    case DC_P_VOLUME:
+        volume = v > 255u ? 255u : v;
+        if (item[sel].id == NO_DSP) { live = 0; knob_ref = knob_now; }
+        return 1;
+    case DC_P_PRESET:
+        if (v >= DC_SLOTS || !(st.used & (1u << v))) return 0;
+        load_preset(v); hl = v;
+        return 1;
+    case DC_P_SAVE:
+        if (v >= DC_SLOTS) return 0;
+        save_preset(v);
+        return !save_err;
+    default: return 0;
+    }
+}
+
 int dc_ui_take(uint32_t *id, uint32_t *value)
 {
     unsigned i;
@@ -254,7 +310,7 @@ int dc_ui_take(uint32_t *id, uint32_t *value)
     for (i = 0; i < DC_NPARAM + 2u; i++) {
         unsigned k = i < DC_NPARAM ? i : (i == DC_NPARAM ? DC_CATCH : DC_ON);
         if (i < DC_NPARAM && (k == DC_CATCH || k == DC_ON)) continue;
-        if (dirty & (1u << k)) { dirty &= ~(1u << k); *id = k; *value = val[k]; return 1; }
+        if (dirty & (1ull << k)) { dirty &= ~(1ull << k); *id = k; *value = val[k]; return 1; }
     }
     return 0;
 }
@@ -421,6 +477,17 @@ void dc_ui_value(char *v)
         break;
     case I_TONE: if (x == 255u) p = str(p, "OPEN"); else p = pct(p, x, 255); break;
     case I_FADE: if (!x) p = str(p, "REPLACE"); else p = pct(p, x, 255); break;
+    case I_RDECAY:                           /* dsp/hall.h: 0.3 s * 2^(6.5 x / 249); HOLD from 250 */
+        if (x >= 250u) p = str(p, "HOLD");
+        else {
+            uint32_t ms = exp2q(300u, x * 1711u);
+            if (ms < 1000u) { p = num(p, ms); p = str(p, "MS"); }
+            else if (ms < 10000u) { p = num(p, ms / 1000u); *p++ = '.'; p = num(p, ms / 100u % 10u); *p++ = 'S'; }
+            else { p = num(p, (ms + 500u) / 1000u); *p++ = 'S'; }
+        }
+        break;
+    case I_RPREDLY: p = num(p, (x * 200u + 127u) / 255u); p = str(p, "MS"); break;
+    case I_RMOD: case I_RSHIMMER: if (!x) p = str(p, "OFF"); else p = pct(p, x, 255); break;
     default: p = pct(p, x, 255); break;                       /* MIX, VOLUME, SMEAR, DEPTH, LOOP LV */
     }
     *p = 0;

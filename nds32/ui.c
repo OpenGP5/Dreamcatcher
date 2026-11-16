@@ -16,7 +16,7 @@ typedef struct { uint8_t r, g, b; } rgb_t;
 static const rgb_t BG = { 18, 9, 30 }, TEXT = { 246, 238, 255 }, DIM = { 150, 124, 182 }, FAINT = { 64, 42, 88 },
                    TRACK = { 44, 26, 64 }, LIVE = { 255, 206, 120 }, VIOLET = { 150, 100, 255 },
                    PINK = { 255, 120, 190 }, LILAC = { 206, 182, 255 };
-#define NSEC 6
+#define NSEC 7
 static const rgb_t SEC[NSEC] = {
     { 206, 182, 255 },   /* MAIN  lilac */
     { 150, 100, 255 },   /* WET   violet */
@@ -24,6 +24,7 @@ static const rgb_t SEC[NSEC] = {
     { 226, 104, 218 },   /* MOD   orchid */
     { 116, 128, 255 },   /* COLOR indigo */
     { 255, 120, 190 },   /* LOOP  pink */
+    { 160, 196, 255 },   /* REVERB mist blue */
 };
 
 static uint16_t c16(rgb_t c) { return UI_RGB(c.r, c.g, c.b); }
@@ -202,7 +203,7 @@ int ui_draw(const ui_state_t *s, int force)
         int total = 0;
         last[4] = h; valid[4] = 1;
         begin(0, 69, UI_W, 11);
-        int step = s->count > 20 ? 5 : 6, dot = step - 2, gap = step - 1;     /* many settings: closer dots */
+        int step = s->count > 28 ? 4 : s->count > 20 ? 5 : 6, dot = step - 2, gap = step - 1;   /* many settings: closer dots */
         for (i = 0; i < (int)s->count; i++) {
             total += i == (int)s->sel ? 2 * step : step;
             if (i + 1 < (int)s->count && s->secs[i + 1] != s->secs[i]) total += gap;

@@ -15,7 +15,7 @@
 #define K 3
 #define PAD 12
 #define COLS 2
-#define MAXSHOTS 16
+#define MAXSHOTS 18
 
 static uint16_t fb[W * H];
 static uint8_t shots[MAXSHOTS][W * H * 3];
@@ -81,6 +81,8 @@ int main(int argc, char **argv)
     fw_foot_release(); ticks(5, 200); fw_foot(); ticks(5, 200); fw_foot_release(); ticks(5, 200);   /* let go */
     fw_foot(); ticks(60, 200); turn_to(10); shot(200);  /* holding the foot while listening: FREEZE; PITCH */
     fw_foot_release(); ticks(5, 200);
+    turn_to(26); knob_to(120); fw_knob(255); shot(255); /* REVERB DECAY at the top: HOLD */
+    turn_to(31); knob_to(255); fw_knob(160); shot(160); /* REVERB SHIMMER */
 
     int pickn = 0, pick[MAXSHOTS];
     for (int a = 2; a < argc && pickn < MAXSHOTS; a++) { int v = atoi(argv[a]); if (v >= 0 && v < nshots) pick[pickn++] = v; }
