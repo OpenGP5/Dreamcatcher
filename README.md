@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.1.0, on OpenGP5 0.3.0-alpha.
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.2.0, on OpenGP5 0.5.4-alpha.
 The first full firmware made with the OpenGP5 platform, and the first to use both of the pedal's processors for
 sound: the engine runs on the control processor (with its controls and screen), the DSP keeps the dry signal and
 the final mix.
@@ -92,7 +92,7 @@ python3 opengp5/tools/gp5tool.py flash build/GP-5_dreamcatcher.bin --sections al
 ```
 
 On the pedal, `python3 opengp5/tools/gp5_link.py load` shows the DSP's load (100 % = one 64-sample block's
-time): about 7 %, since the sound runs on the control processor.
+time): about 43 %, nearly all of it the reverb; the rest of the sound runs on the control processor.
 
 Without a pedal:
 
@@ -117,7 +117,7 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `nds32/controls.c` | the controls, settings, value texts and presets (stored with OpenGP5's `gp5_store_save`) |
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
-| `opengp5/` | the platform, a git submodule pinned to a tested release (0.3.0-alpha) |
+| `opengp5/` | the platform, a git submodule pinned to a tested release (0.5.4-alpha) |
 
 Every setting can also be changed live from a computer: OpenGP5 Launchpad's Presets page shows them all in the pedal's sections
 (OpenGP5 0.5.4: USB `7E 10` / `7E 11`; the ids are in `params.h`, `DC_P_*` for VOLUME, presets and saving). Presets made
@@ -132,7 +132,7 @@ Things learnt on the way, useful for any OpenGP5 firmware:
 - **The control processor is the faster one for float code.** The whole engine at its heaviest (grains pitched,
   reversed and stuttered, full smear, GLITCH doubling the clock, overdub) took 106-108 % of the DSP and 64 % of
   the control processor (288 MHz, with a float unit), which also has more RAM. Dreamcatcher 1.2 therefore runs it
-  there, over the audio link (OpenGP5 0.5.3 or later: 136 link words, `gp5_math` on both processors). The
+  there, over the audio link (OpenGP5 0.5.4-alpha or later: 136 link words, `gp5_math` on both processors). The
   effect's share comes back three blocks later (about 4.4 ms); the dry signal stays on the DSP without that delay.
 
 - **Big per-sample loops belong in RAM.** The DSP runs code straight from SPI flash. Dreamcatcher's 5 KB audio
