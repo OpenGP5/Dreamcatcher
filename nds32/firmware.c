@@ -12,7 +12,7 @@ static unsigned pulse_age = 100;   /* 10 ms ticks since the last cycle started *
 #define STORE_ID 0x434D5244u                               /* "DRMC" */
 unsigned dc_persist_load(void *dst, unsigned max) { return gp5_store_load(STORE_ID, dst, max); }
 int dc_persist_save(const void *src, unsigned len) { return gp5_store_save(STORE_ID, src, len); }
-const char *fw_name(void) { return "dreamcatcher"; }   /* the name Launchpad and the storage owner mark see */
+const char *fw_name(void) { return "dreamcatcher"; }   /* the name Launchpad and the storage claim see */
 /* The computer (OpenGP5 Launchpad) rewrote the presets: load them again, starting on its "last" slot. */
 int fw_store_changed(uint32_t id) { if (id != STORE_ID) return 0; dc_ui_restore(); return 1; }
 
