@@ -26,6 +26,10 @@ void gp5_blit(unsigned x, unsigned y, unsigned w, unsigned h, const uint16_t *px
     for (unsigned j = 0; j < h; j++) for (unsigned i = 0; i < w; i++) fb[(y + j) * W + x + i] = px[j * w + i];
 }
 void gp5_text(unsigned line, const char *s) { (void)line; (void)s; }
+/* the sound engine (engine.c) runs on the pedal only; here the settings it would get are just counted */
+static unsigned engine_sets;
+void dc_engine_start(void) {}
+void dc_engine_set(uint32_t id, uint32_t v) { (void)id; (void)v; engine_sets++; }
 
 static void shot(unsigned knob)
 {

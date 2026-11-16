@@ -57,6 +57,7 @@ typedef struct {
 static const uint16_t dc_ap_len[DC_AP_IN + 2] = { 67, 109, 163, 241, 157, 211 };   /* 4 in the loop, L, R out */
 #define DC_AP_TOTAL (67 + 109 + 163 + 241 + 157 + 211)
 
+typedef struct { float on, mix; } dc_mixer_t;   /* the final mix's ON / MIX ramps (dc_mix) */
 typedef struct { float age; float anchor; } dc_rev_t;
 typedef struct { float age, len, q, off; } dc_grain_t;   /* read speed q (<0 backwards); offset from the delay */
 
@@ -94,7 +95,8 @@ typedef struct {
     float cph, hold[2];
     uint32_t vw;
     float ic1[2], ic2[2], fc;
-    float on, mix;
+    float mix;                              /* MIX ramp for the effect's own gain */
+    dc_mixer_t mx;                          /* the final mix, one-processor build */
 
     /* per-block targets */
     float r, dtarget, smear, rate_hz, depth, crush, qlev, rspeed, fc_t; int fmode, rev_on;
@@ -124,7 +126,7 @@ static const uint8_t dc_scale_n[DC_SCALES] = { 1, 1, 2, 4, 8 };
 static DC_HOT_INLINE uint32_t dc_rand(dc_t *s) { uint32_t x = s->rnd; x ^= x << 13; x ^= x >> 17; x ^= x << 5; return s->rnd = x; }
 static DC_HOT_INLINE float dc_frand(dc_t *s) { return (float)(dc_rand(s) >> 8) * (1.0f / 16777216.0f); }
 
-static void dc_set(dc_t *s, uint32_t id, uint32_t v)
+static __attribute__((unused)) void dc_set(dc_t *s, uint32_t id, uint32_t v)
 {
     static const uint8_t max[DC_NPARAM] = DC_MAXES;
     if (id >= DC_NPARAM) return;
@@ -146,7 +148,7 @@ static void dc_set(dc_t *s, uint32_t id, uint32_t v)
     s->p[id] = v;
 }
 
-static void dc_init(dc_t *s, dc_large_t *L)
+static __attribute__((unused)) void dc_init(dc_t *s, dc_large_t *L)
 {
     static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
     uint32_t i, k;
@@ -461,6 +463,26 @@ static DC_HOT_INLINE int32_t dc_pcm(float x)
     return (int32_t)(x * 2147483648.0f);
 }
 
+/* ---------------------------------------------------------------- the final mix */
+
+/* MIX between dry and the effect (noon: both full); ON fades all of it; off is the exact dry signal. On one
+ * processor dc_run() calls it per sample; in the two-chip build the DSP does, with the effect's share from the
+ * control processor (dc_block_wet). Its own copy of the ON / MIX ramps, so it needs nothing else of dc_t. */
+static DC_HOT_INLINE void dc_mix(dc_mixer_t *m, uint32_t on, uint32_t mix, int32_t in, float el, float er,
+                                 int32_t *out_l, int32_t *out_r)
+{
+    float on_t = on ? 1.0f : 0.0f, mix_t = (float)mix * (1.0f / 255.0f);
+    m->on += (on_t - m->on) * 0.003f;
+    m->mix += (mix_t - m->mix) * 0.003f;
+    if (on_t == 0.0f && m->on < 1e-4f) m->on = 0.0f;
+    if (m->on == 0.0f) { *out_l = *out_r = in; return; }       /* exact bypass */
+    float dry = (float)in * (1.0f / 2147483648.0f);
+    float dg = m->mix < 0.5f ? 1.0f : 2.0f - 2.0f * m->mix;
+    *out_l = dc_pcm(dc_knee(dry + m->on * (dg * dry + el - dry)));
+    *out_r = dc_pcm(dc_knee(dry + m->on * (dg * dry + er - dry)));
+}
+
+
 static void dc_targets(dc_t *s)
 {
     float t = (float)s->p[DC_TIME] * (1.0f / 255.0f);
@@ -497,13 +519,13 @@ static void dc_targets(dc_t *s)
     s->fade = (float)s->p[DC_FADE] * (1.0f / 255.0f);
 }
 
-static DC_HOT void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t *out_r, uint32_t n)
+static DC_HOT_INLINE void dc_run(dc_t *s, const int32_t *in, int32_t *out_l, int32_t *out_r, float *wet_l, float *wet_r,
+                                 uint32_t n)
 {
     dc_targets(s);
     s->fc += (s->fc_t - s->fc) * 0.25f;
     float gf = tanf(GP5_PI * s->fc / DC_FS), kf = 1.3f;
     float a1 = 1.0f / (1.0f + gf * (gf + kf)), a2 = gf * a1, a3 = gf * a2;
-    float on_t = s->p[DC_ON] ? 1.0f : 0.0f;
     float mix_t = (float)s->p[DC_MIX] * (1.0f / 255.0f);
     uint32_t cs = s->p[DC_CATCH];
     int dub = cs == 1 && s->p[DC_OVERDUB];
@@ -597,18 +619,26 @@ static DC_HOT void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t 
             w2[c] = s->fmode ? w2[c] - kf * v1 - v2 : v2;
         }
 
-        /* mix: MIX between dry and the wet channel (noon: both full); the loop on top; ON fades all of it */
-        s->on += (on_t - s->on) * 0.003f;
+        /* the effect's share of the output: the wet channel at its MIX gain, the loop on top */
         s->mix += (mix_t - s->mix) * 0.003f;
-        if (on_t == 0.0f && s->on < 1e-4f) s->on = 0.0f;
-        if (s->on == 0.0f) { out_l[i] = out_r[i] = in[i]; continue; }        /* exact bypass */
-        float dg = s->mix < 0.5f ? 1.0f : 2.0f - 2.0f * s->mix;
         float wg = s->mix > 0.5f ? 1.0f : 2.0f * s->mix;
         float direct = loop * looplv;
-        float ol = dg * dry + wg * dc_soft(w2[0]) + direct;
-        float or_ = dg * dry + wg * dc_soft(w2[1]) + direct;
-        out_l[i] = dc_pcm(dc_knee(dry + s->on * (ol - dry)));
-        out_r[i] = dc_pcm(dc_knee(dry + s->on * (or_ - dry)));
+        float el = wg * dc_soft(w2[0]) + direct, er = wg * dc_soft(w2[1]) + direct;
+        if (wet_l) { wet_l[i] = el; wet_r[i] = er; }           /* two-chip build: the DSP mixes (dc_mix) */
+        else dc_mix(&s->mx, s->p[DC_ON], s->p[DC_MIX], in[i], el, er, &out_l[i], &out_r[i]);
     }
+}
+
+/* One block, all on one processor: in -> out. */
+static DC_HOT __attribute__((unused)) void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t *out_r, uint32_t n)
+{
+    dc_run(s, in, out_l, out_r, 0, 0, n);
+}
+
+/* One block of the effect alone (the two-chip build's control processor): in -> the effect's share of the
+ * output, which dc_mix() on the DSP adds to the dry signal. */
+static DC_HOT __attribute__((unused)) void dc_block_wet(dc_t *s, const int32_t *in, float *wet_l, float *wet_r, uint32_t n)
+{
+    dc_run(s, in, 0, 0, wet_l, wet_r, n);
 }
 #endif

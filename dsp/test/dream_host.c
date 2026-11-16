@@ -149,6 +149,38 @@ int main(void)
         }
         check(same, "bypass is exact");
     }
+    /* the two-chip build: the control processor's dc_block_wet() + the DSP's dc_mix() is the one-processor
+     * dc_block() exactly; with the effect's share carried as the link's Q30 words, within rounding */
+    {
+        static dc_t a, b; static dc_large_t la, lb; static dc_mixer_t m, mq;
+        int32_t in[GP5_BLOCK], l[GP5_BLOCK], r[GP5_BLOCK], l2, r2, lq, rq;
+        float wl[GP5_BLOCK], wr[GP5_BLOCK];
+        uint32_t same = 1, k, i; double worst = 0;
+        dc_init(&a, &la); dc_init(&b, &lb);
+        m.on = m.mix = mq.on = mq.mix = 0.0f;
+        for (k = 0; k < 40000; k++) {
+            if (rnd() % 30 == 0) { uint32_t id = rnd() % DC_NPARAM, v = rnd() % 300u; dc_set(&a, id, v); dc_set(&b, id, v); }
+            input(in, k);
+            dc_block(&a, in, l, r, GP5_BLOCK);
+            dc_block_wet(&b, in, wl, wr, GP5_BLOCK);
+            for (i = 0; i < GP5_BLOCK; i++) {
+                dc_mix(&m, b.p[DC_ON], b.p[DC_MIX], in[i], wl[i], wr[i], &l2, &r2);
+                same &= l2 == l[i] && r2 == r[i];
+                {   /* through the link: Q30, clamped to +-2 */
+                    float x = wl[i] * 1073741824.0f, y = wr[i] * 1073741824.0f;
+                    int32_t qx = x >= 2147483520.0f ? 2147483520 : x <= -2147483648.0f ? (-2147483647 - 1) : (int32_t)x;
+                    int32_t qy = y >= 2147483520.0f ? 2147483520 : y <= -2147483648.0f ? (-2147483647 - 1) : (int32_t)y;
+                    dc_mix(&mq, b.p[DC_ON], b.p[DC_MIX], in[i], (float)qx * (1.0f / 1073741824.0f), (float)qy * (1.0f / 1073741824.0f), &lq, &rq);
+                    double d = ((double)lq - l[i]) / 2147483648.0; if (d < 0) d = -d; if (d > worst) worst = d;
+                    d = ((double)rq - r[i]) / 2147483648.0; if (d < 0) d = -d; if (d > worst) worst = d;
+                }
+            }
+        }
+        printf("two-chip split vs one processor: %s; through the link, worst difference %.2e of full scale\n",
+               same ? "identical" : "DIFFERENT", worst);
+        check(same, "two-chip split = one processor");
+        check(worst < 1e-6, "the link's Q30 words lose nothing audible");
+    }
     printf(fails ? "%d FAILED\n" : "ALL OK\n", fails);
     return fails != 0;
 }

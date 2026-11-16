@@ -1,9 +1,10 @@
 /* Dreamcatcher, control half (platform interface: opengp5/platform/nds32/gp5_firmware.h).
- * The controls are controls.c, the screen ui.c; this file connects them to the platform. */
+ * The controls are controls.c, the screen ui.c, the sound engine.c; this file connects them to the platform. */
 #include "gp5_firmware.h"
 #include "../params.h"
 #include "controls.h"
 #include "ui.h"
+#include "engine.h"
 
 static uint32_t pulse_ph;          /* LFO phase on this side, 0..9999, advanced every 10 ms */
 static unsigned pulse_age = 100;   /* 10 ms ticks since the last cycle started */
@@ -11,8 +12,11 @@ static unsigned pulse_age = 100;   /* 10 ms ticks since the last cycle started *
 #define STORE_ID 0x434D5244u                               /* "DRMC" */
 unsigned dc_persist_load(void *dst, unsigned max) { return gp5_store_load(STORE_ID, dst, max); }
 int dc_persist_save(const void *src, unsigned len) { return gp5_store_save(STORE_ID, src, len); }
+const char *fw_name(void) { return "dreamcatcher"; }   /* the name Launchpad and the storage owner mark see */
+/* The computer (OpenGP5 Launchpad) rewrote the presets: load them again, starting on its "last" slot. */
+int fw_store_changed(uint32_t id) { if (id != STORE_ID) return 0; dc_ui_restore(); return 1; }
 
-void fw_init(void) { dc_ui_init(); dc_ui_restore(); }       /* start on the last-used preset */
+void fw_init(void) { dc_engine_start(); dc_ui_init(); dc_ui_restore(); }   /* start on the last-used preset */
 void fw_foot(void) { dc_ui_foot_down(); }                  /* catch / let go of a micro-loop */
 void fw_foot_release(void) { dc_ui_foot_up(); }
 void fw_para_push(void) { dc_ui_para_down(); }             /* click: save / load a preset; hold 3 s: on / off */
@@ -20,7 +24,14 @@ void fw_para_release(void) { dc_ui_para_up(); }
 void fw_para_turn(int detents) { dc_ui_turn(detents); }    /* choose the setting */
 unsigned fw_level(void) { return dc_ui_level(); }
 void fw_dsp_ready(void) { dc_ui_resend_all(); }
-int fw_take(uint32_t *id, uint32_t *value) { return dc_ui_take(id, value); }
+/* Each setting goes to the sound engine here (engine.c) and, as before, to the DSP, which uses ON and MIX for the
+ * final mix and acknowledges all of them (the platform waits for that at start-up). */
+int fw_take(uint32_t *id, uint32_t *value)
+{
+    if (!dc_ui_take(id, value)) return 0;
+    dc_engine_set(*id, *value);
+    return 1;
+}
 unsigned fw_setting_count(void) { return DC_NPARAM; }
 /* LEDs: magenta-violet when on (red and blue full, a touch of green: the LEDs' blue is strong, so the
  * screen's violet linearised looked blue on the pedal); dim red when off. */

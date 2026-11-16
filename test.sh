@@ -13,4 +13,6 @@ cc -std=c99 -O1 -Wall -Wextra -fsanitize=address,undefined -I $P/nds32 -I nds32 
 build/ui_mock build/screens.png
 cc -std=c99 -O1 -Wall -Wextra -fsanitize=address,undefined -I nds32 nds32/test/presets_test.c nds32/controls.c -o build/presets_test
 build/presets_test
+cc -std=c99 -O1 -Wall -Wextra -fsanitize=address,undefined -I $P/nds32 -I $P/dsp -I nds32 nds32/test/engine_test.c -o build/engine_test
+build/engine_test
 echo "screens: build/screens.png"
