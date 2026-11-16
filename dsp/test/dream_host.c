@@ -102,8 +102,8 @@ int main(void)
 
     /* long delay at the lowest clock, then big TIME jumps: no racing read head, the length lands */
     dc_set(&s, DC_CLOCK, 0); dc_set(&s, DC_TIME, 255);
-    run(20000, 0, "1.4 kHz, 17.8 s delay");
-    check(s.dcur > 24400.0f, "long delay reached");
+    run(30000, 0, "1.4 kHz, 37 s delay");
+    check(s.dcur > (float)DC_DMAX - 100.0f, "long delay reached");
     dc_set(&s, DC_TIME, 60);
     run(3000, 0, "jump down to 60");
     check(s.dcur < 1200.0f && s.duck == 1.0f, "jump landed");

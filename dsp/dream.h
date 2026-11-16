@@ -39,11 +39,12 @@
 #endif
 
 #define DC_FS     44100.0f
-#define DC_MEM    32768u                    /* loop memory, engine samples (0.74 s at 44.1 kHz, 24 s at 1.4 kHz) */
+/* Sizes for the control processor, which runs the engine (1.2: about 236 KB of its 272 KB of RAM). */
+#define DC_MEM    65536u                    /* loop memory, engine samples (1.47 s at 44.1 kHz, 47 s at 1.4 kHz); a power of 2 */
 #define DC_XF     512u                      /* loop seam crossfade */
 #define DC_LFULL  (DC_MEM - DC_XF - 64u)     /* longest loop: leaves the crossfade's samples before its start */
-#define DC_DLY    24576u                    /* delay line, engine steps */
-#define DC_DMAX   (DC_DLY - 64u)             /* longest delay (0.55 s at 44.1 kHz) */
+#define DC_DLY    51200u                    /* delay line, engine steps */
+#define DC_DMAX   (DC_DLY - 64u)             /* longest delay (1.16 s at 44.1 kHz, 37 s at 1.4 kHz) */
 #define DC_RMAX   ((DC_DLY - 64u) / 2u)      /* longest reverse slice: a reverse read reaches back twice its length */
 #define DC_VIB    512u                      /* vibrato line, audio samples */
 
@@ -487,7 +488,7 @@ static void dc_targets(dc_t *s)
 {
     float t = (float)s->p[DC_TIME] * (1.0f / 255.0f);
     s->r = dc_clock_ratio[s->p[DC_CLOCK]];
-    s->dtarget = 200.0f * exp2f(t * 6.937f);                 /* 200 .. 24500 steps: 4.5 .. 555 ms at 44.1 kHz */
+    s->dtarget = 200.0f * exp2f(t * 8.0f);                   /* 200 .. 51136 steps: 4.5 ms .. 1.16 s at 44.1 kHz */
     if (s->dtarget > (float)DC_DMAX) s->dtarget = (float)DC_DMAX;
     s->smear = (float)s->p[DC_SMEAR] * (1.0f / 255.0f);
     s->slice = exp2f(8.0f + 5.0f * (float)s->p[DC_LENGTH] * (1.0f / 255.0f));
@@ -601,8 +602,10 @@ static DC_HOT_INLINE void dc_run(dc_t *s, const int32_t *in, int32_t *out_l, int
             float back = 22.0f + s->depth * 330.0f * s->lfo;
             float idx = (float)s->vw - back;
             if (idx < 0.0f) idx += (float)DC_VIB;
-            uint32_t k = (uint32_t)idx, k2 = (k + 1u) & (DC_VIB - 1u);
+            uint32_t k = (uint32_t)idx;
             float f = idx - (float)k;
+            k &= DC_VIB - 1u;                                /* a tiny negative idx + DC_VIB can round to DC_VIB itself */
+            uint32_t k2 = (k + 1u) & (DC_VIB - 1u);
             wl = s->L->vib[0][k] + f * (s->L->vib[0][k2] - s->L->vib[0][k]);
             wr = s->L->vib[1][k] + f * (s->L->vib[1][k2] - s->L->vib[1][k]);
             s->vw = (s->vw + 1u) & (DC_VIB - 1u);

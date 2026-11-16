@@ -46,7 +46,7 @@ of chance" light.
 | | MIX | dry only … both full (middle) … wet only |
 | | CLOCK | 1.4 kHz … 44 kHz in musical steps. The engine rate of both halves: lower = longer loops and delays, more grit. Changing it while a loop plays shifts the loop's pitch in harmonised steps |
 | | VOLUME | output level |
-| WET | TIME | delay time, 4 ms … 555 ms at 44 kHz (longer at lower CLOCK) |
+| WET | TIME | delay time, 4 ms … 1.16 s at 44 kHz (up to 37 s at lower CLOCK) |
 | | SMEAR | diffusion and feedback: clean echoes … dense reverb |
 | | TONE | darkens the repeats each time they go round (low-pass in the feedback); `OPEN` at the top |
 | | CHANCE | below noon: chance per LFO cycle that something enters the delay (half the time new input, half the time the old output, fed back). Noon: input always enters (`ALWAYS`). Above noon: input always, plus a growing chance of feeding the old output back (`FB`, up to sound-on-sound) |
@@ -63,7 +63,7 @@ of chance" light.
 | COLOR | DISSOLVE | below noon: sample-rate crush (LOFI, bit loss in the lower half); noon CLEAN; above noon: the delay plays backwards, then at 1/2, 1/4, 1/8 speed (REV 1X, REV/2 …) |
 | | FILTER | below noon low-pass 150 Hz … 13 kHz, noon OPEN, above noon high-pass 20 Hz … 2.5 kHz |
 | LOOP | MODE | TAPE or STRETCH |
-| | LENGTH | TAPE: loop length, 1/16 … all of the memory (0.74 s at 44 kHz, 24 s at 1.4 kHz). STRETCH: slice size |
+| | LENGTH | TAPE: loop length, 1/16 … all of the memory (1.47 s at 44 kHz, 47 s at 1.4 kHz). STRETCH: slice size |
 | | SPEED / DRIFT | TAPE (SPEED): REV 4X … REV 0.5X, 0.5X … 4X. STRETCH (DRIFT): how fast the slices move: backwards … FROZEN (noon) … forwards; the ends are unstretched |
 | | LOOP LV | level of the loop itself |
 | | FADE | overdub: how much of the loop stays each pass, `REPLACE` … 100 % |

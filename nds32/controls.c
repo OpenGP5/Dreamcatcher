@@ -359,8 +359,8 @@ void dc_ui_value(char *v)
         break;
     case I_CLOCK: p = str(p, clk_name[x]); break;
     case I_TIME: {
-        uint32_t steps = exp2q(200u, x * 1783u);
-        if (steps > 24512u) steps = 24512u;
+        uint32_t steps = exp2q(200u, x * 2056u);                  /* dream.h: 200 * 2^(8 x / 255), DC_DMAX */
+        if (steps > 51136u) steps = 51136u;
         p = ms_at_clock(p, steps); break;
     }
     case I_CHANCE:
@@ -401,7 +401,7 @@ void dc_ui_value(char *v)
         break;
     case I_LMODE: p = str(p, x ? "STRETCH" : "TAPE"); break;
     case I_LENGTH:
-        p = ms_at_clock(p, val[DC_LMODE] ? exp2q(256u, x * 1285u) : exp2q(2012u, x * 1028u));
+        p = ms_at_clock(p, val[DC_LMODE] ? exp2q(256u, x * 1285u) : exp2q(4060u, x * 1028u));
         break;
     case I_MOTION:
         if (!val[DC_LMODE]) p = str(p, tape_name[x >> 5]);

@@ -29,6 +29,16 @@ static int32_t dry[64];
 static struct { uint32_t id, v; } q[QN];
 static volatile uint32_t q_in, q_out;              /* written by the main loop / by the interrupt only */
 volatile uint32_t dc_engine_blocks, dc_engine_missed, dc_engine_dropped;
+#ifdef GP5_DEBUG_PEEK
+/* Debug builds: how long the engine takes, read over USB (7E 0A). Timer 3 (free on the platform) runs freely with
+ * a 60 ms period; its count (+0x14) before and after each block gives the block's time in timer counts (the
+ * prescaler at +0x10, 144 MHz system clock: (prescaler + 1) / 144 us each). Which way it counts isn't documented:
+ * both differences are kept, the one that's small is the time. */
+#include "hal/timer.h"
+#define BT_BASE 0x4002C000u
+#define BT_REG(o) (*(volatile uint32_t *)(BT_BASE + (o)))
+volatile uint32_t dc_bt_period, dc_bt_prescale, dc_bt_sum_a, dc_bt_sum_b, dc_bt_max_a, dc_bt_max_b, dc_bt_blocks;
+#endif
 
 void dc_engine_set(uint32_t id, uint32_t v)        /* main loop */
 {
@@ -50,6 +60,9 @@ static int32_t q30(float x)
 static void on_block(const int32_t *in, int32_t *out)            /* the link's interrupt, once per block */
 {
     uint32_t i, o = q_out;
+#ifdef GP5_DEBUG_PEEK
+    uint32_t c0 = BT_REG(0x14);
+#endif
     while (o != q_in) { dc_set(&eng, q[o % QN].id, q[o % QN].v); o++; }
     q_out = o;
     if (in[LW_MAGIC] == (int32_t)LW_MAGIC_D) for (i = 0; i < 64; i++) dry[i] = in[LW_IN + i];
@@ -57,12 +70,26 @@ static void on_block(const int32_t *in, int32_t *out)            /* the link's i
     dc_block_wet(&eng, dry, wet_l, wet_r, 64);
     for (i = 0; i < 64; i++) { out[LW_WL + i] = q30(wet_l[i]); out[LW_WR + i] = q30(wet_r[i]); }
     out[LW_MAGIC] = (int32_t)LW_MAGIC_N;
+#ifdef GP5_DEBUG_PEEK
+    {
+        uint32_t c1 = BT_REG(0x14), P = dc_bt_period, a = (c1 + P - c0) % P, b = (c0 + P - c1) % P;
+        dc_bt_sum_a += a; dc_bt_sum_b += b;
+        if (a > dc_bt_max_a) dc_bt_max_a = a;
+        if (b > dc_bt_max_b) dc_bt_max_b = b;
+        dc_bt_blocks++;
+    }
+#endif
     dc_engine_blocks++;
 }
 
 void dc_engine_start(void)
 {
     dc_init(&eng, &eng_large);
+#ifdef GP5_DEBUG_PEEK
+    gp5_timer_config(3, 60000, 0);
+    gp5_timer_start(3);
+    dc_bt_period = BT_REG(0x0C) + 1u; dc_bt_prescale = BT_REG(0x10);
+#endif
     gp5_link_start(on_block);
 }
 
