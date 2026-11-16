@@ -26,6 +26,7 @@ void dc_ui_foot_up(void);
 void dc_ui_para_down(void);
 void dc_ui_para_up(void);
 void dc_ui_tick(void);                          /* every 10 ms: debouncing, taps and holds of both switches */
+void dc_ui_reload(void);                        /* the computer rewrote the presets: load them, keep the sound if it's the same */
 void dc_ui_restore(void);                       /* after dc_ui_init: load the presets, start on the last slot */
 extern unsigned dc_persist_load(void *dst, unsigned max);
 extern int dc_persist_save(const void *src, unsigned len);

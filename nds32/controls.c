@@ -48,12 +48,13 @@ static uint32_t val[DC_NPARAM];
 static unsigned volume, sel, live, have_knob, knob_ref, last_knob, knob_now;
 static uint64_t dirty;                       /* bit = DSP parameter id (more than 32 of them) */
 
-/* presets: what is stored (dc_persist_*), version 3 (1.2 with the reverb: 34 settings). Older ones are migrated on
- * load: version 1 (1.0 / 1.1) had 19 settings, version 2 (1.2 before the reverb) 28. */
+/* presets: what is stored (dc_persist_*), version 4 (1.2: 34 settings, and a name per slot). Older ones are migrated
+ * on load: version 1 (1.0 / 1.1) had 19 settings, version 2 (1.2 before the reverb) 28, version 3 no names. */
 #define SNAP (DC_NPARAM + 1u)                /* every setting's value, then VOLUME */
 #define V1_N 19u                             /* settings in a version 1 slot */
 #define V2_N 28u                             /* settings in a version 2 slot */
-static struct { uint8_t version, last, used, spare; uint8_t slot[DC_SLOTS][SNAP]; } st;
+static struct { uint8_t version, last, used, spare; uint8_t slot[DC_SLOTS][SNAP]; char name[DC_SLOTS][DC_NAME_LEN]; } st;
+#define V3_SIZE (4u + DC_SLOTS * SNAP)          /* a version 3 record: the same, without the names */
 static unsigned preset, hl;                  /* the loaded slot; the slot PRESET highlights */
 static unsigned saved_ticks, save_err, loaded;   /* the message after a click: SAVED / LOADED, for saved_ticks */
 #define HOLD 300u                            /* 3 s: holding PARA turns the effect on / off */
@@ -84,7 +85,7 @@ void dc_ui_init(void)
     for (i = 0; i < DC_NPARAM; i++) val[i] = def[i];
     volume = 255; sel = I_PRESET; live = have_knob = knob_ref = last_knob = 0; dirty = 0;
     for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = 0;
-    st.version = 3; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
+    st.version = 4; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
     for (i = 0; i < sizeof para; i++) { ((uint8_t *)&para)[i] = 0; ((uint8_t *)&foot)[i] = 0; }
     para.since_up = foot.since_up = DEBOUNCE;
 }
@@ -115,27 +116,53 @@ static int changed(void)
     return 0;
 }
 
-void dc_ui_restore(void)
+/* keep_sound: the computer rewrote the presets (names, other slots): if the active slot still holds the same sound,
+ * the pedal keeps playing what it plays (unsaved changes included) instead of loading it again. */
+static void restore(int keep_sound)
 {
     static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
-    uint8_t b[sizeof st];
-    unsigned i, k, n = dc_persist_load(b, sizeof b);
+    uint8_t b[sizeof st], before[SNAP];
+    unsigned i, k, n = dc_persist_load(b, sizeof b), was = preset, had = (st.used >> preset) & 1u;
     unsigned old = 0;                                                    /* settings in the stored version's slots */
-    if (n == sizeof st && b[0] == 3) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
+    for (i = 0; i < SNAP; i++) before[i] = st.slot[was][i];
+    if (n == sizeof st && b[0] == 4) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
+    else if (n == V3_SIZE && b[0] == 3) {                                /* 1.2 before names */
+        for (i = 0; i < V3_SIZE; i++) ((uint8_t *)&st)[i] = b[i];
+        for (k = 0; k < DC_SLOTS; k++) for (i = 0; i < DC_NAME_LEN; i++) st.name[k][i] = 0;
+        st.version = 4;
+    }
     else if (n == 4u + DC_SLOTS * (V2_N + 1u) && b[0] == 2) old = V2_N;  /* 1.2 before the reverb */
     else if (n == 4u + DC_SLOTS * (V1_N + 1u) && b[0] == 1) old = V1_N;  /* 1.0 / 1.1 */
     else return;                                                         /* nothing (valid) stored yet */
     if (old) {                               /* new settings at their defaults, except: no reverb (they sound as saved) */
         for (i = 0; i < 4; i++) ((uint8_t *)&st)[i] = b[i];
-        st.version = 3;
+        st.version = 4;
+        for (k = 0; k < DC_SLOTS; k++) for (i = 0; i < DC_NAME_LEN; i++) st.name[k][i] = 0;
         for (k = 0; k < DC_SLOTS; k++) {
             const uint8_t *o = b + 4 + k * (old + 1u);
             for (i = 0; i < DC_NPARAM; i++) st.slot[k][i] = (uint8_t)(i < old ? o[i] : i == DC_RMIX ? 0u : def[i]);
             st.slot[k][DC_NPARAM] = o[old];
         }
     }
+    for (k = 0; k < DC_SLOTS; k++)                                       /* printable ASCII only */
+        for (i = 0; i < DC_NAME_LEN; i++) if (st.name[k][i] && (st.name[k][i] < 32 || st.name[k][i] > 126)) st.name[k][i] = ' ';
+    if (keep_sound && had && (st.used >> was) & 1u) {
+        for (i = 0; i < SNAP && st.slot[was][i] == before[i]; i++) {}
+        if (i == SNAP) { preset = was; if (hl >= DC_SLOTS) hl = preset; return; }   /* same sound: keep playing */
+    }
     preset = hl = st.last < DC_SLOTS ? st.last : 0;
     if (st.used & (1u << preset)) apply(st.slot[preset]);
+}
+void dc_ui_restore(void) { restore(0); }
+void dc_ui_reload(void) { restore(1); }
+
+/* the slot's name into out (no terminator), its length; 0 = no name */
+static unsigned slot_name(char *out, unsigned k)
+{
+    unsigned n = 0;
+    while (n < DC_NAME_LEN && st.name[k][n]) { out[n] = st.name[k][n]; n++; }
+    while (n && out[n - 1] == ' ') n--;                                  /* trailing spaces don't count */
+    return n;
 }
 
 static void load_preset(unsigned p)          /* PARA tap on PRESET: the highlighted slot, if it holds a sound */
@@ -272,6 +299,7 @@ int dc_ui_param_get(uint32_t id, uint32_t *value)
     case DC_P_USED: *value = st.used; return 1;
     case DC_P_CHANGED: *value = (uint32_t)changed(); return 1;
     case DC_P_SAVE: *value = 0; return 1;
+    case DC_P_FORMAT: *value = 4; return 1;
     default: return 0;
     }
 }
@@ -338,6 +366,14 @@ const char *dc_ui_name(void)
     if (para_counting()) return val[DC_ON] ? "OFF IN" : "ON IN";
     if (sel == I_MOTION) return val[DC_LMODE] ? "DRIFT" : "SPEED";
     if (sel == I_CHANCE && val[DC_SHAPE] == DC_SHAPES - 1u) return "SENSE";
+    if (sel == I_PRESET && (st.used >> hl) & 1u && st.name[hl][0]) {     /* a named slot: its number goes up here */
+        static char nm[10];
+        const char *w = hl != preset ? "LOAD P" : "PRESET P";
+        unsigned i = 0;
+        while (*w) nm[i++] = *w++;
+        nm[i++] = (char)('1' + hl); nm[i] = 0;
+        return nm;
+    }
     return item[sel].name;
 }
 
@@ -402,7 +438,7 @@ void dc_ui_value(char *v)
     char *p = v;
     unsigned x = cur();
     if (dc_ui_overlay()) {                   /* saving: the slot it goes to */
-        if (saved_ticks) { *p++ = 'P'; *p++ = (char)('1' + preset); }
+        if (saved_ticks) { unsigned n = slot_name(p, preset); if (n) p += n; else { *p++ = 'P'; *p++ = (char)('1' + preset); } }
         else p = str(p, val[DC_ON] ? "BYPASS" : "ON");
         *p = 0;
         return;
@@ -410,8 +446,8 @@ void dc_ui_value(char *v)
     switch (sel) {
     case I_PRESET:                           /* x = the highlighted slot */
         if (!(st.used & (1u << x))) { *p++ = (char)('1' + x); p = str(p, " EMPTY"); }
-        else if (x != preset) { p = str(p, "LOAD P"); *p++ = (char)('1' + x); }
-        else { *p++ = 'P'; *p++ = (char)('1' + x); if (changed()) *p++ = '*'; }
+        else if (x != preset) { unsigned n = slot_name(p, x); if (n) p += n; else { p = str(p, "LOAD P"); *p++ = (char)('1' + x); } }
+        else { unsigned n = slot_name(p, x); if (n) p += n; else { *p++ = 'P'; *p++ = (char)('1' + x); } if (changed()) *p++ = '*'; }
         break;
     case I_CLOCK: p = str(p, clk_name[x]); break;
     case I_TIME: {

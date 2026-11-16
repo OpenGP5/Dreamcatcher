@@ -15,7 +15,7 @@
 #define K 3
 #define PAD 12
 #define COLS 2
-#define MAXSHOTS 18
+#define MAXSHOTS 22
 
 static uint16_t fb[W * H];
 static uint8_t shots[MAXSHOTS][W * H * 3];
@@ -83,6 +83,16 @@ int main(int argc, char **argv)
     fw_foot_release(); ticks(5, 200);
     turn_to(26); knob_to(120); fw_knob(255); shot(255); /* REVERB DECAY at the top: HOLD */
     turn_to(31); knob_to(255); fw_knob(160); shot(160); /* REVERB SHIMMER */
+    {   /* preset names (version 4): a short one, and a 12-character one in the smaller font */
+        extern void dc_ui_reload(void);
+        unsigned nm = 4u + 8u * (34u + 1u);                 /* params.h DC_NPARAM + VOLUME, 8 slots */
+        for (unsigned k = 0; k < 8; k++) { memset(store + nm + 12u * k, 0, 12); memcpy(store + nm + 12u * k, "Glass Pad", 9); }
+        turn_to(0); knob_to(10); fw_knob(10); dc_ui_reload(); shot(10);
+        for (unsigned k = 0; k < 8; k++) memcpy(store + nm + 12u * k, "Velvet Dusk2", 12);
+        dc_ui_reload(); shot(10);               /* a long name: still at its start for 1.5 s */
+        ticks(150 + 60, 10); shot(10);          /* sliding */
+        ticks(400, 10); shot(10);               /* at its end */
+    }
 
     int pickn = 0, pick[MAXSHOTS];
     for (int a = 2; a < argc && pickn < MAXSHOTS; a++) { int v = atoi(argv[a]); if (v >= 0 && v < nshots) pick[pickn++] = v; }

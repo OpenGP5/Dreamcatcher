@@ -51,6 +51,8 @@ enum {
 #define DC_P_USED    0x102u               /* read: which slots hold a sound (bit per slot)                         */
 #define DC_P_CHANGED 0x103u               /* read: 1 if the sound differs from the active preset                   */
 #define DC_P_SAVE    0x104u               /* set: save the sound into slot 0..7 (as a PARA click does); read: 0     */
+#define DC_P_FORMAT  0x106u               /* read: the preset record's version (4: with names)                      */
+#define DC_NAME_LEN  12u                  /* a preset's name: up to 12 printable ASCII characters                   */
 
 #define DC_SHAPES 7
 #define DC_CLOCKS 11

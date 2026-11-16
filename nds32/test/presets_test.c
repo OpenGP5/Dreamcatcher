@@ -94,7 +94,7 @@ int main(void)
       assert(dc_ui_preset() == 1 && dsp[DC_TIME] == 71 && dc_ui_level() == 180 && dsp[DC_GRAIN] == def[DC_GRAIN]);
       assert(strcmp(value(), "P2") == 0);
       assert(dsp[DC_RMIX] == 0 && dsp[DC_RDECAY] == def[DC_RDECAY]);           /* no reverb: they sound as saved */
-      para(5); assert(store[0] == 3 && store_len == 4 + 8 * (DC_NPARAM + 1)); }  /* saved again as version 3 */
+      para(5); assert(store[0] == 4 && store_len == 4 + 8 * (DC_NPARAM + 1) + 8 * DC_NAME_LEN); }  /* saved again as version 4 */
 
     /* 1.2 presets from before the reverb (version 2, 28 settings + VOLUME) load, the reverb off */
     { static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
@@ -114,14 +114,37 @@ int main(void)
       assert(!dc_ui_param_set(DC_CATCH, 1) && !dc_ui_param_set(DC_FREEZE, 1));                  /* the foot's */
       assert(dc_ui_param_set(DC_P_VOLUME, 123) && dc_ui_level() == 123);
       assert(dc_ui_param_get(DC_P_USED, &v) && v == 0 && !dc_ui_param_set(DC_P_PRESET, 3));      /* empty: no */
-      assert(dc_ui_param_set(DC_P_SAVE, 3) && store[0] == 3 && dc_ui_param_get(DC_P_USED, &v) && v == 8);
+      assert(dc_ui_param_set(DC_P_SAVE, 3) && store[0] == 4 && dc_ui_param_get(DC_P_USED, &v) && v == 8);
       assert(dc_ui_param_get(DC_P_PRESET, &v) && v == 3 && dc_ui_param_get(DC_P_CHANGED, &v) && v == 0);
       dc_ui_param_set(DC_TIME, 10); assert(dc_ui_param_get(DC_P_CHANGED, &v) && v == 1);
       assert(dc_ui_param_set(DC_P_PRESET, 3) && (drain(), dsp[DC_TIME] == 77));                   /* load brings it back */
       assert(!dc_ui_param_get(0x200, &v)); }
 
+    /* names (version 4): shown for the slot; "PRESET P1" / "LOAD P2" above; kept when saving on the pedal; a rename
+     * from the computer keeps the sound playing (unsaved changes included) */
+    { const unsigned SN = 4 + 8 * (DC_NPARAM + 1), NM = SN;   /* names follow the slots */
+      dc_ui_init(); memset(store, 0, sizeof store); store_len = 0; drain();
+      dc_ui_param_set(DC_TIME, 33); assert(dc_ui_param_set(DC_P_SAVE, 0) && dc_ui_param_set(DC_P_SAVE, 1));
+      assert(store[0] == 4 && store_len == SN + 8 * DC_NAME_LEN && dc_ui_preset() == 1);
+      memcpy(store + NM, "Glass Pad", 9); memcpy(store + NM + DC_NAME_LEN, "Long name XY", 12);   /* P1 + P2 (12 characters: the most) */
+      dc_ui_param_set(DC_TIME, 77); drain();                  /* unsaved change on P2 */
+      dc_ui_reload(); drain();
+      assert(dc_ui_preset() == 1 && dsp[DC_TIME] == 77);      /* same sound in P2: still playing, change kept */
+      go(I_PRESET); knob(255); dc_ui_knob(255 / 8 * 1 + 2); dc_ui_knob(255 / 8 * 1 + 2);   /* highlight P2 (current) */
+      assert(strcmp(dc_ui_name(), "PRESET P2") == 0 && strcmp(value(), "Long name XY*") == 0);
+      dc_ui_knob(2); dc_ui_knob(2);                           /* highlight P1 */
+      assert(strcmp(dc_ui_name(), "LOAD P1") == 0 && strcmp(value(), "Glass Pad") == 0);
+      dc_ui_param_set(DC_P_SAVE, 1);                          /* saving keeps the name */
+      assert(memcmp(store + NM + DC_NAME_LEN, "Long name XY", 12) == 0);
+      store[4 + (DC_NPARAM + 1) * 1 + DC_TIME] = 99;          /* the computer changed P2's sound: it loads */
+      dc_ui_reload(); drain(); assert(dsp[DC_TIME] == 99);
+      { uint32_t v; assert(dc_ui_param_get(DC_P_FORMAT, &v) && v == 4); }
+      /* a version 3 record (no names) loads, nameless */
+      store[0] = 3; store_len = SN; dc_ui_init(); dc_ui_restore(); go(I_PRESET);
+      assert(strcmp(dc_ui_name(), "PRESET") == 0 && value()[0] == 'P'); }
+
     /* a record from another version is ignored */
     store[0] = 9; dc_ui_init(); dc_ui_restore(); assert(dc_ui_preset() == 0);
-    puts("ALL OK: foot tap / hold (catch, freeze, overdub), PARA click save / load, PARA hold on / off, bounces, power cycle, 1.1 and early-1.2 presets, live access");
+    puts("ALL OK: foot tap / hold (catch, freeze, overdub), PARA click save / load, PARA hold on / off, bounces, power cycle, 1.1 and early-1.2 presets, live access, names");
     return 0;
 }

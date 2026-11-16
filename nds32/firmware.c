@@ -8,13 +8,14 @@
 
 static uint32_t pulse_ph;          /* LFO phase on this side, 0..9999, advanced every 10 ms */
 static unsigned pulse_age = 100;   /* 10 ms ticks since the last cycle started */
+static unsigned ticks;             /* 10 ms ticks since start-up (the screen's scrolling) */
 
 #define STORE_ID 0x434D5244u                               /* "DRMC" */
 unsigned dc_persist_load(void *dst, unsigned max) { return gp5_store_load(STORE_ID, dst, max); }
 int dc_persist_save(const void *src, unsigned len) { return gp5_store_save(STORE_ID, src, len); }
 const char *fw_name(void) { return "dreamcatcher"; }   /* the name Launchpad and the storage claim see */
 /* The computer (OpenGP5 Launchpad) rewrote the presets: load them again, starting on its "last" slot. */
-int fw_store_changed(uint32_t id) { if (id != STORE_ID) return 0; dc_ui_restore(); return 1; }
+int fw_store_changed(uint32_t id) { if (id != STORE_ID) return 0; dc_ui_reload(); return 1; }
 
 void fw_init(void) { dc_engine_start(); dc_ui_init(); dc_ui_restore(); }   /* start on the last-used preset */
 void fw_foot(void) { dc_ui_foot_down(); }                  /* catch / let go of a micro-loop */
@@ -44,6 +45,7 @@ void fw_knob(unsigned knob)
 {
     dc_ui_knob(knob);
     dc_ui_tick();
+    ticks++;
     /* The pulse follows the RATE setting (not the DSP's glitch jumps): a flash at each cycle, then a fade. */
     pulse_ph += dc_ui_rate_x100();
     if (pulse_ph >= 10000u) { pulse_ph %= 10000u; pulse_age = 0; }
@@ -68,6 +70,7 @@ int fw_draw(unsigned knob, int force)
     s.sec = (uint8_t)dc_ui_section(s.sel);
     s.sec_name = dc_ui_section_name(s.sec);
     s.secs = secs;
+    s.ticks = ticks;
     s.pulse = (uint8_t)(pulse_age < 6 ? 4 : pulse_age < 10 ? 3 : pulse_age < 15 ? 2 : pulse_age < 22 ? 1 : 0);
     return ui_draw(&s, force);
 }

@@ -83,6 +83,26 @@ static void text(int x, int y, const char *s, int k, uint16_t c)
 #define NAME_FONT  (&gp5_font_sans_16)
 #define VALUE_FONT (&gp5_font_sans_24)
 static int aa_width(const gp5_font_t *f, const char *s) { return gp5_text_width(f, s); }
+
+/* A value wider than its line scrolls as the NAM player's names do: 1.5 s still at the start, an eased slide to its
+ * end at about 20 px a second, 1.5 s still, and back. d: how much wider than the line it is; t: 10 ms ticks since it
+ * appeared. Returns how far to the left it is drawn. */
+#define V_LEFT  12                                  /* the value's line: after the section stripe .. */
+#define V_RIGHT 154                                 /* .. to the right margin */
+#define PAUSE_TICKS 150u
+#define SCROLL_TICKS_PER_PX 5u
+static int scroll_off(int d, unsigned t)
+{
+    unsigned mv = (unsigned)d * SCROLL_TICKS_PER_PX, per = 2u * (PAUSE_TICKS + mv), p = t % per, x;
+    if (p < PAUSE_TICKS) return 0;
+    if (p < PAUSE_TICKS + mv) x = p - PAUSE_TICKS;
+    else if (p < 2u * PAUSE_TICKS + mv) return d;
+    else x = mv - (p - 2u * PAUSE_TICKS - mv);
+    {   /* smoothstep: 3x^2 - 2x^3, x = 0..1 in 1/4096 */
+        uint32_t u = (uint32_t)((uint64_t)x * 4096u / mv), e = (u * u >> 12) * (3u * 4096u - 2u * u) >> 12;
+        return (int)(((uint32_t)d * e + 2048u) >> 12);
+    }
+}
 static void aa_text(int x, int baseline, const char *s, const gp5_font_t *f, rgb_t fg)
 {
     gp5_draw_text(band, bw, bh, x - (int)bx0, baseline - (int)f->base - (int)by0, f, s,
@@ -168,14 +188,26 @@ int ui_draw(const ui_state_t *s, int force)
         return 1;
     }
 
-    /* value, rows 32..56 */
-    h = hash_str(s->on + 2u * s->live + 4u * s->sec, s->value);
+    /* value, rows 32..56. One too long for its line (a preset's name) scrolls, as the NAM player's names do. */
+    static uint32_t v_shown;                                         /* the value whose scrolling runs */
+    static unsigned v_t0;
+    int v_w = aa_width(VALUE_FONT, s->value), v_d = v_w - (V_RIGHT - V_LEFT), v_off;
+    if (hash_str(0, s->value) != v_shown) { v_shown = hash_str(0, s->value); v_t0 = s->ticks; }   /* starts from its beginning */
+    v_off = v_d > 0 ? scroll_off(v_d, s->ticks - v_t0) : 0;
+    h = hash_str(s->on + 2u * s->live + 4u * s->sec, s->value) ^ ((uint32_t)v_off * 2654435761u);
     if (!valid[2] || h != last[2]) {
+        rgb_t fg = s->live ? LIVE : (s->on ? TEXT : DIM);
         last[2] = h; valid[2] = 1;
         begin(0, 32, UI_W, 25);
-        x = 154 - aa_width(VALUE_FONT, s->value);
-        if (x >= 12) rect(6, 35, 2, 19, c16(s->on ? accent : FAINT));    /* section stripe, when the value leaves room */
-        aa_text(x, 52, s->value, VALUE_FONT, s->live ? LIVE : (s->on ? TEXT : DIM));
+        if (v_d <= 0) {                                              /* fits: right-aligned, still */
+            x = V_RIGHT - v_w;
+            if (x >= V_LEFT) rect(6, 35, 2, 19, c16(s->on ? accent : FAINT));   /* section stripe, when the value leaves room */
+            aa_text(x, 52, s->value, VALUE_FONT, fg);
+        } else {                                                     /* scrolls between the stripe and the edge */
+            aa_text(V_LEFT - v_off, 52, s->value, VALUE_FONT, fg);
+            rect(0, 32, V_LEFT, 25, c16(BG)); rect(V_RIGHT, 32, UI_W - V_RIGHT, 25, c16(BG));
+            rect(6, 35, 2, 19, c16(s->on ? accent : FAINT));
+        }
         send();
         return 1;
     }

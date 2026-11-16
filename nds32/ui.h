@@ -16,9 +16,10 @@
 
 typedef struct {
     const char *name;
-    char value[10];
+    char value[16];                 /* up to a 12-character preset name and its '*' */
     uint8_t frac, knob, live, on, caught, sel, count, sec;
     uint8_t pulse;            /* 0..4: brightness of the LFO pulse */
+    unsigned ticks;           /* 10 ms ticks: times a long value's scrolling */
     const uint8_t *secs;      /* section of each setting, count entries */
     const char *sec_name;
 } ui_state_t;
