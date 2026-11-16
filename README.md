@@ -16,7 +16,8 @@ contains none of their code.
 Your playing is recorded all the time. One press catches the last moments as a loop that plays back like tape
 or is stretched into slow-moving slices. Alongside it, a wet channel lets bits of sound into a delay "by chance"
 once per LFO cycle, smears them into reverb, jumps their clock in octaves, reverses or crushes them, modulates
-and filters them. The loop can be routed into the wet channel, so the two halves feed each other.
+and filters them. Grains read the delay and can jump in pitch, play backwards or stutter, and a hall reverb
+holds it all. The loop can be routed into the wet channel, so the two halves feed each other.
 
 > **Alpha.** Flashing custom firmware can go wrong. Read OpenGP5's
 > [getting-started guide](https://github.com/OpenGP5/OpenGP5/blob/main/GETTING-STARTED.md), especially
@@ -36,7 +37,7 @@ and filters them. The loop can be routed into the wet channel, so the two halves
 The LEDs glow violet when Dreamcatcher is on and dim red when it is off. The dot in the screen's header pulses at the LFO rate, like a "moment
 of chance" light.
 
-![Four of Dreamcatcher's screens: a preset highlighted to load, TIME, DISSOLVE and the looper's DRIFT](docs/screens.png)
+![Four of Dreamcatcher's screens: TIME, the grains' SCALE, overdubbing into a loop (DUB), and the reverb's DECAY at HOLD](docs/screens.png)
 
 ## Settings
 
@@ -119,8 +120,8 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
 | `opengp5/` | the platform, a git submodule pinned to a tested release (0.5.4-alpha) |
 
-Every setting can also be changed live from a computer: OpenGP5 Launchpad's Presets page shows them all in the pedal's sections
-(OpenGP5 0.5.4: USB `7E 10` / `7E 11`; the ids are in `params.h`, `DC_P_*` for VOLUME, presets and saving). Presets made
+Every setting can also be changed live from a computer over USB (OpenGP5 0.5.4: `7E 10` sets one, `7E 11` reads
+them; the ids are in `params.h`, with `DC_P_*` for VOLUME, loading and saving presets). Presets made
 with 1.0, 1.1 or earlier 1.2 builds load with the reverb off, so they sound as they were saved.
 
 Things learnt on the way, useful for any OpenGP5 firmware:

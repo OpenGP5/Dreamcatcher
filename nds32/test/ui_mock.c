@@ -1,7 +1,7 @@
 /* Screen mock-ups on the computer: the real controls.c + ui.c + firmware.c render states into a PNG sheet.
  * Run by ./test.sh (writes build/screens.png). Needs zlib.
  *   ui_mock out.png [n ...]   only screens n (0-based, in the order below); the README's docs/screens.png is
- *                             build/ui_mock docs/screens.png 4 5 7 9 */
+ *                             build/ui_mock docs/screens.png 5 12 13 15 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
