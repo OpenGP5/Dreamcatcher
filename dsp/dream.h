@@ -12,6 +12,12 @@
  * CLOCK sets the engine rate of both halves (MOOD's idea): lower = longer loops, longer delays, grittier.
  * ROUTE sends the input, the loop, or both through the wet channel.
  *
+ * 1.2: the delay is read by two overlapping GRAINS. Each new grain may be pitched to an interval of SCALE
+ * (PITCH), play backwards (REVERSE) or repeat the grain before (STUTTER); the grains are fed back, so pitched
+ * repeats stack into a shimmer. TONE darkens the feedback. FREEZE: the delay line repeats what it holds,
+ * exactly, while the grains keep reading it. OVERDUB: the playing goes into the caught loop; FADE sets how much
+ * of the loop stays each pass. A big TIME change dips the repeats, jumps and comes back (no racing read head).
+ *
  * Plain C, no allocation, no C library: the same file runs on the pedal and on the computer
  * (opengp5/tools/run_effect.py, dsp/test/dream_host.c; ./test.sh). Big buffers are the caller's (dc_large_t). */
 #ifndef DREAM_H
@@ -52,6 +58,7 @@ static const uint16_t dc_ap_len[DC_AP_IN + 2] = { 67, 109, 163, 241, 157, 211 };
 #define DC_AP_TOTAL (67 + 109 + 163 + 241 + 157 + 211)
 
 typedef struct { float age; float anchor; } dc_rev_t;
+typedef struct { float age, len, q, off; } dc_grain_t;   /* read speed q (<0 backwards); offset from the delay */
 
 typedef struct {
     dc_large_t *L;
@@ -72,6 +79,11 @@ typedef struct {
     float ap[DC_AP_TOTAL]; uint16_t api[DC_AP_IN + 2];
     float oprev[2], ocur[2];                /* step-rate outputs, interpolated to the audio rate */
     dc_rev_t rev[2]; float rsince, rmix;
+    dc_grain_t gr[2]; uint32_t gnext; float gsince, glen;   /* grains */
+    float duck; int jump;                   /* a big TIME change: dip, jump, come back */
+    float tlp;                              /* TONE: feedback low-pass state */
+    float fz, flen;                         /* freeze: crossfade 0..1, frozen delay length (whole steps) */
+    uint32_t opos;                          /* overdub write position in the loop */
 
     /* chance, glitch, LFO */
     float lfo_ph, lfo, rprev, rnext, env;
@@ -87,6 +99,7 @@ typedef struct {
     /* per-block targets */
     float r, dtarget, smear, rate_hz, depth, crush, qlev, rspeed, fc_t; int fmode, rev_on;
     float slice, slice_inv2, tape_len;
+    float grain, ppitch, prev, pstut, tone_a, fade;
 
     uint32_t steps;                         /* engine steps run (statistics) */
 } dc_t;
@@ -96,19 +109,39 @@ static const float dc_clock_ratio[DC_CLOCKS] = {
 };
 static const float dc_tape_speed[8] = { -4.0f, -2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f, 4.0f };
 
+/* SCALE: the read speeds a pitched grain picks from (2^(semitones/12)) */
+#define DC_P5U 1.4983071f   /* +7, a fifth up    */
+#define DC_P4D 0.7491535f   /* -5, a fourth down */
+static const float dc_scale[DC_SCALES][8] = {
+    { 2.0f },                                                                           /* OCT UP  */
+    { 0.5f },                                                                           /* OCT DN  */
+    { 2.0f, 0.5f },                                                                     /* OCTAVES */
+    { DC_P5U, 2.0f, DC_P4D, 0.5f },                                                     /* 5TH+OCT */
+    { 1.1892071f, 1.2599210f, 1.3348399f, DC_P5U, 1.7817974f, 2.0f, DC_P4D, 0.5f },    /* HARMONY: m3 M3 4 5 m7 8, -4 -8 */
+};
+static const uint8_t dc_scale_n[DC_SCALES] = { 1, 1, 2, 4, 8 };
+
 static DC_HOT_INLINE uint32_t dc_rand(dc_t *s) { uint32_t x = s->rnd; x ^= x << 13; x ^= x >> 17; x ^= x << 5; return s->rnd = x; }
 static DC_HOT_INLINE float dc_frand(dc_t *s) { return (float)(dc_rand(s) >> 8) * (1.0f / 16777216.0f); }
 
 static void dc_set(dc_t *s, uint32_t id, uint32_t v)
 {
-    static const uint8_t max[DC_NPARAM] = { 1, 255, DC_CLOCKS - 1, 1, 1, 255, 255, 255, 2, 255, 255, 255, 255, 255,
-                                            DC_SHAPES - 1, 1, 255, 255, 255 };
+    static const uint8_t max[DC_NPARAM] = DC_MAXES;
     if (id >= DC_NPARAM) return;
     if (v > max[id]) v = max[id];
     if (id == DC_CATCH && v && !s->p[DC_CATCH]) {           /* catch: freeze the memory, start the loop */
-        s->catch_w = s->mw;
+        s->catch_w = s->mw;                                  /* (2 -> 1 keeps going: it ran silently, in time) */
         s->lpos = 0.0f;
         s->shead = 0.0f; s->ssince = 1e9f;
+    }
+    if (id == DC_CATCH && !v && s->p[DC_CATCH]) { s->macc = 0.0f; s->mcnt = 0; }   /* recording again */
+    if (id == DC_FREEZE && v && !s->p[DC_FREEZE] && s->fz == 0.0f) {      /* hold the delay at a whole length */
+        s->flen = (float)(int32_t)(s->dcur + 0.5f);
+        s->dcur = s->flen; s->jump = 0;
+    }
+    if (id == DC_OVERDUB && v != s->p[DC_OVERDUB]) {         /* write where the loop plays now */
+        s->opos = (uint32_t)(s->p[DC_LMODE] ? s->shead : s->lpos);
+        s->macc = 0.0f; s->mcnt = 0;
     }
     s->p[id] = v;
 }
@@ -127,6 +160,7 @@ static void dc_init(dc_t *s, dc_large_t *L)
     s->rnd = 0x2545F491u;
     s->sage[0] = s->sage[1] = 1e9f;
     s->dcur = 4410.0f; s->gm = 1.0f; s->crm = 1.0f;
+    s->duck = 1.0f; s->tone_a = 1.0f; s->fade = 1.0f;
     s->tin = s->gin = 1.0f;
     s->fc = 19000.0f;
 }
@@ -235,16 +269,97 @@ static DC_HOT_INLINE float dc_knee(float x)                               /* uni
     return x < 0.0f ? -y : y;
 }
 
+/* a new grain on the free head: maybe a repeat of the last one (STUTTER), else maybe pitched (PITCH, SCALE)
+ * and / or backwards (REVERSE). Its read range is kept inside the delay line. */
+static DC_HOT void dc_grain_start(dc_t *s)
+{
+    uint32_t k = s->gnext, j = k ^ 1u;
+    dc_grain_t *g = &s->gr[k], *pv = &s->gr[j];
+    float G = s->grain, q = 1.0f, off = 0.0f;
+    int rep = 0;
+    if (s->pstut > 0.0f && pv->len > 0.0f && dc_frand(s) < s->pstut) {
+        float span;
+        G = pv->len; q = pv->q; off = pv->off + pv->age;    /* the same audio again, from its start */
+        span = G * (1.0f - q);
+        rep = s->dcur + off + (span > 0.0f ? span : 0.0f) <= (float)DC_DLY - 4.0f;
+    }
+    if (!rep) {
+        float a;
+        G = s->grain; q = 1.0f; off = 0.0f;
+        if (s->ppitch > 0.0f && dc_frand(s) < s->ppitch) {
+            uint32_t sc = s->p[DC_SCALE];
+            q = dc_scale[sc][dc_rand(s) % dc_scale_n[sc]];
+        }
+        if (s->prev > 0.0f && dc_frand(s) < s->prev) q = -q;
+        a = fabsf(1.0f - q);
+        if (a > 0.0f) {                                      /* centred on the delay time, then kept inside */
+            float b0, b1, lo, hi;
+            if (G * a > (float)DC_DLY - 16.0f) G = ((float)DC_DLY - 16.0f) / a;
+            off = -0.5f * G * (1.0f - q);
+            b0 = s->dcur + off; b1 = b0 + G * (1.0f - q);
+            lo = b0 < b1 ? b0 : b1; hi = b0 < b1 ? b1 : b0;
+            if (lo < 4.0f) off += 4.0f - lo;
+            else if (hi > (float)DC_DLY - 4.0f) off -= hi - ((float)DC_DLY - 4.0f);
+        }
+    }
+    g->age = 0.0f; g->len = G; g->q = q; g->off = off;
+    s->gnext = j; s->gsince = 0.0f; s->glen = G;
+}
+
 static DC_HOT_INLINE void dc_step(dc_t *s)
 {
     float sm = s->smear;
-    s->dcur += (s->dtarget - s->dcur) * 0.0006f;            /* time changes glide like tape */
-    float y = dc_dly(s, s->dcur);
-    float g = 0.72f * sm, yd = y;
+    int hold = s->p[DC_FREEZE] || s->fz > 0.0f;             /* frozen (or fading in / out): the length stays */
+    if (!hold) {
+        float d = s->dtarget - s->dcur;
+        if (s->jump || fabsf(d) > 0.25f * s->dcur + 256.0f) {
+            s->jump = 1;                                     /* big change: dip out, jump, come back */
+            s->duck -= 1.0f / 128.0f;
+            if (s->duck <= 0.0f) { s->duck = 0.0f; s->dcur = s->dtarget; s->jump = 0; }
+        } else {                                             /* small change: glide like tape, at most +-50 % speed */
+            d *= 0.0006f;
+            s->dcur += d > 0.5f ? 0.5f : d < -0.5f ? -0.5f : d;
+        }
+    }
+    if (!s->jump && s->duck < 1.0f) { s->duck += 1.0f / 128.0f; if (s->duck > 1.0f) s->duck = 1.0f; }
+
+    /* the grains: two half-overlapping read heads */
+    if (s->gsince >= 0.5f * s->glen) dc_grain_start(s);
+    float y = 0.0f;
+    int plain = 1;
+    for (uint32_t k = 0; k < 2; k++)
+        if (s->gr[k].age < s->gr[k].len && (s->gr[k].q != 1.0f || s->gr[k].off != 0.0f)) plain = 0;
+    if (plain) y = dc_dly(s, s->dcur);                       /* plain delay: one read, exact */
+    else for (uint32_t k = 0; k < 2; k++) {
+        dc_grain_t *gk = &s->gr[k];
+        if (gk->age >= gk->len) continue;
+        float t = gk->age * 2.0f / gk->len;
+        if (t > 1.0f) t = 2.0f - t;
+        float back = s->dcur + gk->off + gk->age * (1.0f - gk->q);
+        back = back < 1.0f ? 1.0f : back > (float)DC_DLY - 2.0f ? (float)DC_DLY - 2.0f : back;
+        y += dc_dly(s, back) * t;
+    }
+    for (uint32_t k = 0; k < 2; k++) if (s->gr[k].age < s->gr[k].len) s->gr[k].age += 1.0f;
+    s->gsince += 1.0f;
+    y *= s->duck;
+
+    float yd = y;
+    float g = 0.72f * sm;
     for (uint32_t k = 0; k < DC_AP_IN; k++) yd = dc_ap(s, k, yd, g);
+    s->tlp += s->tone_a * (yd - s->tlp);                     /* TONE: 1 = open */
     float base = 0.88f * sm, fb = base + s->gfb * (0.985f - base);
-    float w = dc_soft(s->gin * s->dx + fb * yd);
-    s->L->dly[s->dw] = (int16_t)(w * 32767.0f);
+    float w = dc_soft(s->gin * s->dx + fb * s->tlp);
+
+    /* freeze: the line copies itself at the frozen length (crossfaded in and out over 256 steps) */
+    if (s->p[DC_FREEZE]) { s->fz += 1.0f / 256.0f; if (s->fz > 1.0f) s->fz = 1.0f; }
+    else if (s->fz > 0.0f) { s->fz -= 1.0f / 256.0f; if (s->fz < 0.0f) s->fz = 0.0f; }
+    int32_t fi = (int32_t)s->dw - (int32_t)s->flen;
+    if (fi < 0) fi += (int32_t)DC_DLY;
+    if (s->fz >= 1.0f) s->L->dly[s->dw] = s->L->dly[fi];    /* exact: repeats forever */
+    else {
+        if (s->fz > 0.0f) w += s->fz * ((float)s->L->dly[fi] * (1.0f / 32768.0f) - w);
+        s->L->dly[s->dw] = (int16_t)(w * 32767.0f);
+    }
     if (++s->dw == DC_DLY) s->dw = 0;
 
     /* reverse: two half-overlapping heads read the delay line backwards at rspeed */
@@ -317,6 +432,26 @@ static DC_HOT_INLINE float dc_lfo_shape(dc_t *s)
     }
 }
 
+/* ---------------------------------------------------------------- overdub */
+
+static DC_HOT_INLINE void dc_dub_put(dc_t *s, uint32_t i, float v)
+{
+    float o = (float)s->L->mem[i] * (1.0f / 32768.0f);
+    s->L->mem[i] = (int16_t)(dc_knee(o * s->fade + v) * 32767.0f);
+}
+
+/* one memory step of new playing into the caught loop, at a 1x write head that started where the loop played;
+ * the samples the loop's seam fades into (just before its start) get the same, so the seam stays smooth */
+static DC_HOT_INLINE void dc_dub(dc_t *s, float v)
+{
+    uint32_t len = (uint32_t)(s->p[DC_LMODE] ? (float)DC_LFULL : s->tape_len);
+    if (s->opos >= len) s->opos = 0;
+    uint32_t i = (s->catch_w - len + s->opos) & (DC_MEM - 1u);
+    dc_dub_put(s, i, v);
+    if (s->opos + DC_XF >= len) dc_dub_put(s, (i - len) & (DC_MEM - 1u), v);
+    s->opos++;
+}
+
 /* ---------------------------------------------------------------- block */
 
 static DC_HOT_INLINE int32_t dc_pcm(float x)
@@ -354,6 +489,12 @@ static void dc_targets(dc_t *s)
     if (f < 120) { s->fmode = 0; s->fc_t = 150.0f * exp2f((float)f * (6.44f / 120.0f)); }       /* 150 Hz .. 13 kHz */
     else if (f <= 135) { s->fmode = 0; s->fc_t = 19000.0f; }                                   /* open */
     else { s->fmode = 1; s->fc_t = 20.0f * exp2f((float)(f - 136) * (6.97f / 119.0f)); }       /* 20 Hz .. 2.5 kHz */
+    s->grain = exp2f(8.0f + 5.0f * (float)s->p[DC_GRAIN] * (1.0f / 255.0f));   /* 256 .. 8192 steps */
+    s->ppitch = (float)s->p[DC_PITCH] * (1.0f / 255.0f);
+    s->prev = (float)s->p[DC_REVERSE] * (1.0f / 255.0f);
+    s->pstut = (float)s->p[DC_STUTTER] * (1.0f / 255.0f);
+    s->tone_a = s->p[DC_TONE] >= 255 ? 1.0f : 0.02f * exp2f((float)s->p[DC_TONE] * (5.6f / 255.0f));
+    s->fade = (float)s->p[DC_FADE] * (1.0f / 255.0f);
 }
 
 static DC_HOT void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t *out_r, uint32_t n)
@@ -364,7 +505,9 @@ static DC_HOT void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t 
     float a1 = 1.0f / (1.0f + gf * (gf + kf)), a2 = gf * a1, a3 = gf * a2;
     float on_t = s->p[DC_ON] ? 1.0f : 0.0f;
     float mix_t = (float)s->p[DC_MIX] * (1.0f / 255.0f);
-    float lp_t = s->p[DC_CATCH] && s->p[DC_ON] ? 1.0f : 0.0f;
+    uint32_t cs = s->p[DC_CATCH];
+    int dub = cs == 1 && s->p[DC_OVERDUB];
+    float lp_t = cs == 1 && s->p[DC_ON] ? 1.0f : 0.0f;
     float looplv = (float)s->p[DC_LOOPLV] * (1.0f / 255.0f);
     float env_thr = 0.25f * exp2f(-(float)s->p[DC_CHANCE] * (8.0f / 255.0f));
 
@@ -372,15 +515,16 @@ static DC_HOT void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t 
         float dry = (float)in[i] * (1.0f / 2147483648.0f);
         float r = s->r;
 
-        /* memory: always listening until a loop is caught */
-        if (!s->p[DC_CATCH]) {
+        /* memory: always listening until a loop is caught; overdub writes into the caught loop */
+        if (!cs || dub) {
             s->macc += dry; s->mcnt++;
             s->mph += r;
             if (s->mph >= 1.0f) {
                 s->mph -= 1.0f;
                 float v = s->macc / (float)s->mcnt;
-                s->L->mem[s->mw] = (int16_t)((v > 1.0f ? 1.0f : v < -1.0f ? -1.0f : v) * 32767.0f);
-                s->mw = (s->mw + 1u) & (DC_MEM - 1u);
+                v = v > 1.0f ? 1.0f : v < -1.0f ? -1.0f : v;
+                if (!cs) { s->L->mem[s->mw] = (int16_t)(v * 32767.0f); s->mw = (s->mw + 1u) & (DC_MEM - 1u); }
+                else dc_dub(s, v);
                 s->macc = 0.0f; s->mcnt = 0;
             }
         }
@@ -388,6 +532,7 @@ static DC_HOT void dc_block(dc_t *s, const int32_t *in, int32_t *out_l, int32_t 
         s->lgain += (lp_t - s->lgain) * 0.0012f;
         if (lp_t == 0.0f && s->lgain < 1e-4f) s->lgain = 0.0f;
         if (s->lgain > 0.0f) loop = dc_loop(s) * s->lgain;
+        else if (cs == 2) (void)dc_loop(s);                  /* caught, foot still down: runs silently, in time */
 
         /* LFO + chance */
         float a = fabsf(dry);

@@ -1,5 +1,5 @@
 /* Dreamcatcher: the settings both halves share. Sent as link command 0x7F10 [id u32][value u32].
- * Values are small integers; the DSP clamps anything out of range. */
+ * Values are small integers; the DSP clamps anything out of range. New settings go at the end (preset layout). */
 #ifndef DREAMCATCHER_PARAMS_H
 #define DREAMCATCHER_PARAMS_H
 
@@ -7,7 +7,8 @@ enum {
     DC_ON,        /* 0 bypass (exact dry), 1 on                                                   */
     DC_MIX,       /* 0..255: dry only .. both full (128) .. wet only                              */
     DC_CLOCK,     /* 0..10: engine sample rate, 1.4 kHz .. 44.1 kHz (10). Loop length + delay time */
-    DC_CATCH,     /* 0 listening (memory records), 1 the micro-loop plays                         */
+    DC_CATCH,     /* 0 listening (memory records), 1 the micro-loop plays,
+                     2 caught but silent (the foot is down: plays on release, in time, or turns into freeze) */
     DC_LMODE,     /* 0 TAPE, 1 STRETCH                                                            */
     DC_LENGTH,    /* 0..255: TAPE loop length 1/16 .. all; STRETCH slice size                     */
     DC_MOTION,    /* 0..255: TAPE speed REV 4X .. 4X (8 steps); STRETCH: rev .. frozen (128) .. fwd */
@@ -23,12 +24,28 @@ enum {
     DC_DISSOLVE,  /* 0..255 below noon: sample-rate crush; noon clean; above: reverse, slower in halves */
     DC_GLITCH,    /* 0..255 below noon: half / normal / double clock; above: random clock jumps   */
     DC_FILTER,    /* 0..255 below noon low-pass, noon open, above high-pass                       */
+    /* 1.2 */
+    DC_GRAIN,     /* 0..255 grain size of the delay's read heads (engine steps, exponential)      */
+    DC_PITCH,     /* 0..255 chance that a grain is pitched to an interval of SCALE                */
+    DC_SCALE,     /* 0..4 OCT UP, OCT DN, OCTAVES, 5TH+OCT, HARMONY                               */
+    DC_REVERSE,   /* 0..255 chance that a grain plays backwards                                   */
+    DC_STUTTER,   /* 0..255 chance that a grain repeats the one before                            */
+    DC_TONE,      /* 0..255 low-pass in the feedback: dark .. open (255)                          */
+    DC_FADE,      /* 0..255 overdub: how much of the loop stays each pass (255 all, 0 replaced)   */
+    DC_FREEZE,    /* 0/1 the wet channel repeats what it holds, nothing new enters (foot held)    */
+    DC_OVERDUB,   /* 0/1 the playing goes into the loop (foot held while a loop plays)            */
     DC_NPARAM
 };
 
 #define DC_SHAPES 7
 #define DC_CLOCKS 11
+#define DC_SCALES 5
+
+/* largest value of each setting */
+#define DC_MAXES { 1, 255, DC_CLOCKS - 1, 2, 1, 255, 255, 255, 2, 255, 255, 255, 255, 255, DC_SHAPES - 1, 1, 255, 255, \
+                   255, 255, 255, DC_SCALES - 1, 255, 255, 255, 255, 1, 1 }
 
 /* defaults: a gentle ambient patch, effect on */
-#define DC_DEFAULTS { 1, 128, 10, 0, 0, 255, 160, 200, 1, 150, 150, 128, 70, 60, 0, 0, 128, 85, 110 }
+#define DC_DEFAULTS { 1, 128, 10, 0, 0, 255, 160, 200, 1, 150, 150, 128, 70, 60, 0, 0, 128, 85, 110, \
+                      170, 0, 3, 0, 0, 255, 230, 0, 0 }
 #endif

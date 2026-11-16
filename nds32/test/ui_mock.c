@@ -65,12 +65,18 @@ int main(int argc, char **argv)
     knob_to(150); fw_knob(60); ticks(5, 60); fw_para_push(); ticks(5, 60); fw_para_release(); ticks(160, 60);  /* slot 2 */
     fw_knob(10); ticks(5, 10); shot(10);                /* knob highlights slot 1: LOAD P1 (a click loads it) */
     turn_to(4); knob_to(150); fw_knob(210); shot(210);  /* TIME */
-    turn_to(8); ticks(300, 210); shot(210);             /* RATE, pulse fading */
-    turn_to(12); knob_to(90); fw_knob(230); shot(230);  /* DISSOLVE reverse */
-    fw_foot(); ticks(5, 230); fw_foot_release(); ticks(5, 230); turn_to(16); shot(230);   /* loop caught, SPEED */
-    turn_to(14); knob_to(60); fw_knob(240); turn_to(16); knob_to(240); fw_knob(100); shot(100);  /* STRETCH, DRIFT */
+    turn_to(14); ticks(300, 210); shot(210);            /* RATE, pulse fading */
+    turn_to(18); knob_to(90); fw_knob(230); shot(230);  /* DISSOLVE reverse */
+    fw_foot(); ticks(5, 230); fw_foot_release(); ticks(5, 230); turn_to(22); shot(230);   /* loop caught, SPEED */
+    turn_to(20); knob_to(60); fw_knob(240); turn_to(22); knob_to(240); fw_knob(100); shot(100);  /* STRETCH, DRIFT */
     fw_para_push(); ticks(160, 100); shot(100);         /* holding PARA: OFF IN, countdown */
     ticks(150, 100); fw_para_release(); ticks(5, 100); turn_to(2); shot(100);   /* off (loop still caught); CLOCK */
+    fw_para_push(); ticks(320, 100); fw_para_release(); ticks(5, 100);           /* on again */
+    turn_to(11); knob_to(100); fw_knob(200); shot(200); /* SCALE: 5TH+OCT */
+    fw_foot(); ticks(60, 200); turn_to(24); shot(200);  /* holding the foot while the loop plays: DUB; FADE */
+    fw_foot_release(); ticks(5, 200); fw_foot(); ticks(5, 200); fw_foot_release(); ticks(5, 200);   /* let go */
+    fw_foot(); ticks(60, 200); turn_to(10); shot(200);  /* holding the foot while listening: FREEZE; PITCH */
+    fw_foot_release(); ticks(5, 200);
 
     int pickn = 0, pick[MAXSHOTS];
     for (int a = 2; a < argc && pickn < MAXSHOTS; a++) { int v = atoi(argv[a]); if (v >= 0 && v < nshots) pick[pickn++] = v; }

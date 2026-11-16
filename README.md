@@ -27,7 +27,8 @@ and filters them. The loop can be routed into the wet channel, so the two halves
 |---|---|
 | turn PARA | choose a setting (the screen shows its section and value) |
 | volume knob | changes the chosen setting once turned a little (the value turns gold while it follows) |
-| foot switch | catch a micro-loop / let it go and listen again (the looper only) |
+| tap the foot switch | catch a micro-loop / let it go and listen again |
+| hold the foot switch | while a loop plays: **overdub** into it until you let go (`DUB`). While listening: **freeze** the wet channel until you let go (`FRZ`) |
 | click PARA | save the current sound into the active preset (`SAVED P3`). On PRESET with another slot highlighted by the volume knob (`LOAD P3`): load that slot, or, if it is empty, save the sound there |
 | hold PARA 3 s | effect on / off (`OFF IN` counts down after 1 s). The looper is left alone: a caught loop stays caught, and is heard again when the effect is back on. While off, the output is the exact dry signal |
 
@@ -46,8 +47,14 @@ of chance" light.
 | | VOLUME | output level |
 | WET | TIME | delay time, 4 ms … 555 ms at 44 kHz (longer at lower CLOCK) |
 | | SMEAR | diffusion and feedback: clean echoes … dense reverb |
+| | TONE | darkens the repeats each time they go round (low-pass in the feedback); `OPEN` at the top |
 | | CHANCE | below noon: chance per LFO cycle that something enters the delay (half the time new input, half the time the old output, fed back). Noon: input always enters (`ALWAYS`). Above noon: input always, plus a growing chance of feeding the old output back (`FB`, up to sound-on-sound) |
 | | GLITCH | below noon: delay + LFO clock at HALF, NORMAL or DOUBLE speed (octave jumps). Above noon: a growing chance (`RND`) that each LFO cycle picks a new clock and crush rate at random |
+| GRAIN | GRAIN | size of the grains that read the delay, 6 ms … 186 ms at 44 kHz. Every grain may be pitched, reversed or repeated |
+| | PITCH | chance that a grain is pitched to an interval of SCALE. Fed back, the pitched repeats stack into a shimmer |
+| | SCALE | the intervals: OCT UP, OCT DN, OCTAVES, 5TH+OCT (fifth up, fourth down, octaves), HARMONY (minor / major third, fourth, fifth, minor seventh, octave, and a fourth and octave down) |
+| | REVERSE | chance that a grain plays backwards |
+| | STUTTER | chance that a grain repeats the one before it, instead of moving on |
 | MOD | RATE | LFO rate, 0.05 … 12 Hz; also how often CHANCE decides |
 | | DEPTH | modulation depth |
 | | SHAPE | SINE, SQUARE, RAMP, SAW, RND SIN, RND SQR, ENV. With ENV your playing's loudness opens the delay instead of the LFO, and CHANCE becomes SENSE (sensitivity) |
@@ -58,6 +65,7 @@ of chance" light.
 | | LENGTH | TAPE: loop length, 1/16 … all of the memory (0.74 s at 44 kHz, 24 s at 1.4 kHz). STRETCH: slice size |
 | | SPEED / DRIFT | TAPE (SPEED): REV 4X … REV 0.5X, 0.5X … 4X. STRETCH (DRIFT): how fast the slices move: backwards … FROZEN (noon) … forwards; the ends are unstretched |
 | | LOOP LV | level of the loop itself |
+| | FADE | overdub: how much of the loop stays each pass, `REPLACE` … 100 % |
 | | ROUTE | what the wet channel processes: IN (the guitar; loop in parallel), IN+LOOP, LOOP (the loop while it plays) |
 
 A good start: catch a chord, set ROUTE to IN+LOOP, turn SMEAR up and CHANCE a little above noon, then roll

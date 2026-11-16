@@ -16,9 +16,11 @@ typedef struct { uint8_t r, g, b; } rgb_t;
 static const rgb_t BG = { 18, 9, 30 }, TEXT = { 246, 238, 255 }, DIM = { 150, 124, 182 }, FAINT = { 64, 42, 88 },
                    TRACK = { 44, 26, 64 }, LIVE = { 255, 206, 120 }, VIOLET = { 150, 100, 255 },
                    PINK = { 255, 120, 190 }, LILAC = { 206, 182, 255 };
-static const rgb_t SEC[5] = {
+#define NSEC 6
+static const rgb_t SEC[NSEC] = {
     { 206, 182, 255 },   /* MAIN  lilac */
     { 150, 100, 255 },   /* WET   violet */
+    { 186, 120, 255 },   /* GRAIN amethyst */
     { 226, 104, 218 },   /* MOD   orchid */
     { 116, 128, 255 },   /* COLOR indigo */
     { 255, 120, 190 },   /* LOOP  pink */
@@ -129,7 +131,7 @@ int ui_draw(const ui_state_t *s, int force)
 {
     static uint32_t last[6];
     static uint8_t valid[6];
-    rgb_t accent = SEC[s->sec < 5 ? s->sec : 0];
+    rgb_t accent = SEC[s->sec < NSEC ? s->sec : 0];
     uint32_t h;
     int x, i;
 
@@ -138,8 +140,9 @@ int ui_draw(const ui_state_t *s, int force)
     /* header, rows 0..14 */
     h = 1u + s->on + 2u * s->caught;
     if (!valid[0] || h != last[0]) {
-        const char *st = !s->on ? "OFF" : s->caught ? "LOOP" : "ON";
-        rgb_t pc = !s->on ? FAINT : s->caught ? PINK : VIOLET;
+        static const char *const stn[4] = { "ON", "LOOP", "DUB", "FRZ" };
+        const char *st = !s->on ? "OFF" : stn[s->caught & 3u];
+        rgb_t pc = !s->on ? FAINT : s->caught == 2 ? LIVE : s->caught == 3 ? LILAC : s->caught ? PINK : VIOLET;
         int w = text_w(st, 1) + 10;
         last[0] = h; valid[0] = 1; valid[5] = 0;
         begin(0, 0, UI_W, 15);
@@ -199,16 +202,17 @@ int ui_draw(const ui_state_t *s, int force)
         int total = 0;
         last[4] = h; valid[4] = 1;
         begin(0, 69, UI_W, 11);
+        int step = s->count > 20 ? 5 : 6, dot = step - 2, gap = step - 1;     /* many settings: closer dots */
         for (i = 0; i < (int)s->count; i++) {
-            total += i == (int)s->sel ? 12 : 6;
-            if (i + 1 < (int)s->count && s->secs[i + 1] != s->secs[i]) total += 5;
+            total += i == (int)s->sel ? 2 * step : step;
+            if (i + 1 < (int)s->count && s->secs[i + 1] != s->secs[i]) total += gap;
         }
         x = (UI_W - total + 2) / 2;
         for (i = 0; i < (int)s->count; i++) {
-            rgb_t c = SEC[s->secs[i] < 5 ? s->secs[i] : 0];
-            if (i == (int)s->sel) { pill(x, 72, 10, 4, 2, c16(s->on ? c : DIM)); x += 12; }
-            else { pill(x, 72, 4, 4, 2, c16(s->on ? mixc(BG, c, 2, 5) : FAINT)); x += 6; }
-            if (i + 1 < (int)s->count && s->secs[i + 1] != s->secs[i]) x += 5;
+            rgb_t c = SEC[s->secs[i] < NSEC ? s->secs[i] : 0];
+            if (i == (int)s->sel) { pill(x, 72, 2 * step - 2, 4, 2, c16(s->on ? c : DIM)); x += 2 * step; }
+            else { pill(x, 72 + (4 - dot) / 2, dot, dot, dot / 2, c16(s->on ? mixc(BG, c, 2, 5) : FAINT)); x += step; }
+            if (i + 1 < (int)s->count && s->secs[i + 1] != s->secs[i]) x += gap;
         }
         send();
         return 1;

@@ -27,11 +27,18 @@ int main(void)
     assert(dc_ui_sel() == I_PRESET && dc_ui_preset() == 0 && store_len == 0 && dsp[DC_ON] == 1);
     assert(strcmp(value(), "1 EMPTY") == 0);
 
-    /* foot: the looper only, at once; holding it does nothing else */
-    dc_ui_foot_down(); drain(); assert(dsp[DC_CATCH] == 1);
-    dc_ui_foot_up(); ticks(5); foot(5); assert(dsp[DC_CATCH] == 0 && dsp[DC_ON] == 1);
-    foot(500); assert(dsp[DC_CATCH] == 1 && dsp[DC_ON] == 1);
-    foot(5); assert(dsp[DC_CATCH] == 0);
+    /* foot: a press catches at once (silent while down), a tap plays it, the next tap lets it go */
+    dc_ui_foot_down(); drain(); assert(dsp[DC_CATCH] == 2 && dc_ui_caught() == 0);
+    dc_ui_foot_up(); ticks(5); drain(); assert(dsp[DC_CATCH] == 1 && dc_ui_caught() == 1);
+    foot(5); assert(dsp[DC_CATCH] == 0 && dsp[DC_ON] == 1);
+    /* held while listening: freeze until release, listening again (no loop) */
+    dc_ui_foot_down(); ticks(50); drain(); assert(dsp[DC_FREEZE] == 1 && dsp[DC_CATCH] == 0 && dc_ui_caught() == 3);
+    ticks(400); dc_ui_foot_up(); ticks(5); drain(); assert(dsp[DC_FREEZE] == 0 && dsp[DC_CATCH] == 0 && dsp[DC_ON] == 1);
+    /* held while a loop plays: overdub until release, the loop stays */
+    foot(5); assert(dsp[DC_CATCH] == 1);
+    dc_ui_foot_down(); ticks(50); drain(); assert(dsp[DC_OVERDUB] == 1 && dsp[DC_CATCH] == 1 && dc_ui_caught() == 2);
+    dc_ui_foot_up(); ticks(5); drain(); assert(dsp[DC_OVERDUB] == 0 && dsp[DC_CATCH] == 1);
+    foot(5); assert(dsp[DC_CATCH] == 0 && dsp[DC_FREEZE] == 0);
 
     /* PARA held 3 s: on / off, the looper untouched (caught stays caught) */
     foot(5); assert(dsp[DC_CATCH] == 1);
@@ -77,8 +84,19 @@ int main(void)
     dc_ui_init(); dc_ui_restore(); dc_ui_resend_all(); drain();
     assert(dc_ui_preset() == 1 && dsp[DC_TIME] == 90 && dsp[DC_ON] == 1 && dsp[DC_CATCH] == 0);
 
+    /* 1.0 / 1.1 presets (version 1, 19 settings + VOLUME per slot) load, the new settings at their defaults */
+    { static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
+      memset(store, 0, sizeof store); store[0] = 1; store[1] = 1; store[2] = 3;   /* last = slot 2, slots 1 + 2 used */
+      for (unsigned k = 0; k < 2; k++) { for (unsigned i = 0; i < 19; i++) store[4 + k * 20 + i] = (uint8_t)def[i];
+                                         store[4 + k * 20 + DC_TIME] = (uint8_t)(70 + k); store[4 + k * 20 + 19] = 180; }
+      store_len = 4 + 8 * 20;
+      dc_ui_init(); dc_ui_restore(); dc_ui_resend_all(); drain();
+      assert(dc_ui_preset() == 1 && dsp[DC_TIME] == 71 && dc_ui_level() == 180 && dsp[DC_GRAIN] == def[DC_GRAIN]);
+      assert(strcmp(value(), "P2") == 0);
+      para(5); assert(store[0] == 2 && store_len > 4 + 8 * 20); }               /* saved again as version 2 */
+
     /* a record from another version is ignored */
     store[0] = 9; dc_ui_init(); dc_ui_restore(); assert(dc_ui_preset() == 0);
-    puts("ALL OK: foot = looper only, PARA click save / load, PARA hold on / off, bounces, power cycle");
+    puts("ALL OK: foot tap / hold (catch, freeze, overdub), PARA click save / load, PARA hold on / off, bounces, power cycle, 1.1 presets");
     return 0;
 }

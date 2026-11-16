@@ -83,7 +83,61 @@ int main(void)
     run(3000, 0, "clock 1.4 kHz");
     dc_set(&s, DC_SHAPE, 6); dc_set(&s, DC_CHANCE, 200);
     run(1500, 0, "envelope gate");
-    run(40000, 1, "random settings, 60 s");
+    dc_set(&s, DC_SHAPE, 0); dc_set(&s, DC_CHANCE, 128); dc_set(&s, DC_CLOCK, 10); dc_set(&s, DC_DISSOLVE, 128);
+    dc_set(&s, DC_FILTER, 128); dc_set(&s, DC_MODTYPE, 0); dc_set(&s, DC_GLITCH, 85); dc_set(&s, DC_TIME, 150);
+    dc_set(&s, DC_PITCH, 255); dc_set(&s, DC_SCALE, 3); dc_set(&s, DC_SMEAR, 200);
+    check(run(2000, 0, "grains: 5ths + octaves, always"), "pitched grains sound");
+    dc_set(&s, DC_SCALE, 4); dc_set(&s, DC_REVERSE, 128); dc_set(&s, DC_GRAIN, 255);
+    run(2000, 0, "grains: harmony, half reversed, 186 ms");
+    dc_set(&s, DC_PITCH, 0); dc_set(&s, DC_REVERSE, 255); dc_set(&s, DC_GRAIN, 0);
+    run(1500, 0, "grains: all reversed, 6 ms");
+    dc_set(&s, DC_REVERSE, 0); dc_set(&s, DC_STUTTER, 230); dc_set(&s, DC_GRAIN, 128);
+    run(2000, 0, "grains: stutter 90 %");
+    dc_set(&s, DC_STUTTER, 0); dc_set(&s, DC_TONE, 0); dc_set(&s, DC_SMEAR, 255); dc_set(&s, DC_CHANCE, 255);
+    dc_set(&s, DC_PITCH, 200); dc_set(&s, DC_SCALE, 0);
+    run(3000, 0, "shimmer, dark tone, sound on sound");
+    dc_set(&s, DC_TONE, 255);
+    run(3000, 0, "shimmer, open tone");
+    dc_set(&s, DC_PITCH, 0); dc_set(&s, DC_SMEAR, 150); dc_set(&s, DC_CHANCE, 128);
+
+    /* long delay at the lowest clock, then big TIME jumps: no racing read head, the length lands */
+    dc_set(&s, DC_CLOCK, 0); dc_set(&s, DC_TIME, 255);
+    run(20000, 0, "1.4 kHz, 17.8 s delay");
+    check(s.dcur > 24400.0f, "long delay reached");
+    dc_set(&s, DC_TIME, 60);
+    run(3000, 0, "jump down to 60");
+    check(s.dcur < 1200.0f && s.duck == 1.0f, "jump landed");
+    dc_set(&s, DC_TIME, 250); dc_set(&s, DC_PITCH, 255); dc_set(&s, DC_REVERSE, 128); dc_set(&s, DC_GRAIN, 255);
+    run(20000, 0, "1.4 kHz, long, grains pitched + reversed");
+    dc_set(&s, DC_PITCH, 0); dc_set(&s, DC_REVERSE, 0); dc_set(&s, DC_CLOCK, 10); dc_set(&s, DC_TIME, 150);
+
+    /* freeze: after the input stops, the line keeps what it held, exactly, for as long as it is held */
+    {
+        int32_t in[GP5_BLOCK] = { 0 }, l[GP5_BLOCK], r[GP5_BLOCK];
+        dc_set(&s, DC_SMEAR, 0);
+        run(1000, 0, "before freeze");
+        dc_set(&s, DC_FREEZE, 1);
+        for (uint32_t k = 0; k < 200; k++) dc_block(&s, in, l, r, GP5_BLOCK);
+        double e1 = 0, e2 = 0;
+        for (uint32_t k = 0; k < 2000; k++) {                /* silence in: the frozen sound must stay */
+            dc_block(&s, in, l, r, GP5_BLOCK);
+            for (uint32_t i = 0; i < GP5_BLOCK; i++) { double a = l[i] / 2147483648.0; if (k < 1000) e1 += a * a; else e2 += a * a; }
+        }
+        printf("freeze: energy first %.3f, later %.3f, length %.0f\n", e1, e2, s.flen);
+        check(e1 > 0.01 && e2 > 0.98 * e1 && e2 < 1.02 * e1, "freeze holds the sound unchanged");
+        dc_set(&s, DC_FREEZE, 0);
+        run(1500, 0, "after freeze");
+        dc_set(&s, DC_SMEAR, 150);
+    }
+
+    /* overdub: playing goes into the caught loop; FADE 0 replaces it, FADE 255 keeps it */
+    dc_set(&s, DC_CATCH, 2); run(20, 0, "caught, silent");
+    dc_set(&s, DC_CATCH, 1); dc_set(&s, DC_OVERDUB, 1); dc_set(&s, DC_FADE, 255);
+    check(run(3000, 0, "overdub, fade keep"), "overdub sounds");
+    dc_set(&s, DC_FADE, 0); run(1000, 0, "overdub, replace");
+    dc_set(&s, DC_LMODE, 1); dc_set(&s, DC_FADE, 200); run(1000, 0, "overdub, stretch");
+    dc_set(&s, DC_OVERDUB, 0); dc_set(&s, DC_LMODE, 0); dc_set(&s, DC_CATCH, 0);
+    run(80000, 1, "random settings, 2 min");
 
     /* exact bypass */
     dc_set(&s, DC_ON, 0);

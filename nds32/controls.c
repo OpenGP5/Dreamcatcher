@@ -3,8 +3,9 @@
 
 #define NO_DSP 255u
 #define ID_PRESET 254u
-enum { I_PRESET, I_MIX, I_CLOCK, I_VOLUME, I_TIME, I_SMEAR, I_CHANCE, I_GLITCH, I_RATE, I_DEPTH, I_SHAPE, I_MOD,
-       I_DISSOLVE, I_FILTER, I_LMODE, I_LENGTH, I_MOTION, I_LOOPLV, I_ROUTE, I_N };
+enum { I_PRESET, I_MIX, I_CLOCK, I_VOLUME, I_TIME, I_SMEAR, I_TONE, I_CHANCE, I_GLITCH,
+       I_GRAIN, I_PITCH, I_SCALE, I_REVERSE, I_STUTTER, I_RATE, I_DEPTH, I_SHAPE, I_MOD,
+       I_DISSOLVE, I_FILTER, I_LMODE, I_LENGTH, I_MOTION, I_LOOPLV, I_FADE, I_ROUTE, I_N };
 
 static const struct { const char *name; uint8_t sec, id; uint16_t n; } item[I_N] = {
     { "PRESET",   SEC_MAIN,  ID_PRESET,   DC_SLOTS },
@@ -13,8 +14,14 @@ static const struct { const char *name; uint8_t sec, id; uint16_t n; } item[I_N]
     { "VOLUME",   SEC_MAIN,  NO_DSP,      256 },
     { "TIME",     SEC_WET,   DC_TIME,     256 },
     { "SMEAR",    SEC_WET,   DC_SMEAR,    256 },
+    { "TONE",     SEC_WET,   DC_TONE,     256 },
     { "CHANCE",   SEC_WET,   DC_CHANCE,   256 },
     { "GLITCH",   SEC_WET,   DC_GLITCH,   256 },
+    { "GRAIN",    SEC_GRAIN, DC_GRAIN,    256 },
+    { "PITCH",    SEC_GRAIN, DC_PITCH,    256 },
+    { "SCALE",    SEC_GRAIN, DC_SCALE,    DC_SCALES },
+    { "REVERSE",  SEC_GRAIN, DC_REVERSE,  256 },
+    { "STUTTER",  SEC_GRAIN, DC_STUTTER,  256 },
     { "RATE",     SEC_MOD,   DC_RATE,     256 },
     { "DEPTH",    SEC_MOD,   DC_DEPTH,    256 },
     { "SHAPE",    SEC_MOD,   DC_SHAPE,    DC_SHAPES },
@@ -25,16 +32,18 @@ static const struct { const char *name; uint8_t sec, id; uint16_t n; } item[I_N]
     { "LENGTH",   SEC_LOOP,  DC_LENGTH,   256 },
     { "SPEED",    SEC_LOOP,  DC_MOTION,   256 },
     { "LOOP LV",  SEC_LOOP,  DC_LOOPLV,   256 },
+    { "FADE",     SEC_LOOP,  DC_FADE,     256 },
     { "ROUTE",    SEC_LOOP,  DC_ROUTE,    3 },
 };
-static const char *const sec_name[SEC_N] = { "MAIN", "WET", "MOD", "COLOR", "LOOP" };
+static const char *const sec_name[SEC_N] = { "MAIN", "WET", "GRAIN", "MOD", "COLOR", "LOOP" };
 
 static uint32_t val[DC_NPARAM];
 static unsigned volume, sel, live, have_knob, knob_ref, last_knob;
 static uint32_t dirty;                       /* bit = DSP parameter id */
 
-/* presets: what is stored (dc_persist_*), version 1 */
+/* presets: what is stored (dc_persist_*), version 2 (1.2: 28 settings; version 1 had 19, migrated on load) */
 #define SNAP (DC_NPARAM + 1u)                /* every setting's value, then VOLUME */
+#define V1_N 19u                             /* settings in a version 1 slot */
 static struct { uint8_t version, last, used, spare; uint8_t slot[DC_SLOTS][SNAP]; } st;
 static unsigned preset, hl;                  /* the loaded slot; the slot PRESET highlights */
 static unsigned saved_ticks, save_err, loaded;   /* the message after a click: SAVED / LOADED, for saved_ticks */
@@ -42,11 +51,17 @@ static unsigned saved_ticks, save_err, loaded;   /* the message after a click: S
 #define HOLD_SHOW 100u                       /* the countdown shows after 1 s */
 #define TAP_MAX 80u                          /* a press up to 0.8 s is a tap */
 #define DEBOUNCE 3u                          /* 30 ms */
+#define FOOT_HOLD 35u                        /* foot held 0.35 s: overdub (loop playing) / freeze (listening) */
+
+/* not part of a preset: on / off and what the foot does now */
+static int live_only(unsigned id) { return id == DC_ON || id == DC_CATCH || id == DC_FREEZE || id == DC_OVERDUB; }
 
 /* A switch from the platform's raw edges (not debounced). A press acts at once unless it comes within
  * DEBOUNCE of a release (a bounce); a release counts once the switch has stayed open for DEBOUNCE. */
 typedef struct { uint8_t raw, down; uint16_t held, quiet, since_up; } btn_t;
 static btn_t para, foot;
+static unsigned foot_mode;                   /* 0 up; 1 pressed while listening; 2 pressed while a loop plays;
+                                                3 freezing; 4 overdubbing */
 
 static void set(unsigned id, uint32_t v)
 {
@@ -60,7 +75,7 @@ void dc_ui_init(void)
     for (i = 0; i < DC_NPARAM; i++) val[i] = def[i];
     volume = 255; sel = I_PRESET; live = have_knob = knob_ref = last_knob = 0; dirty = 0;
     for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = 0;
-    st.version = 1; preset = hl = 0; saved_ticks = save_err = 0;
+    st.version = 2; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
     for (i = 0; i < sizeof para; i++) { ((uint8_t *)&para)[i] = 0; ((uint8_t *)&foot)[i] = 0; }
     para.since_up = foot.since_up = DEBOUNCE;
 }
@@ -74,11 +89,10 @@ static void snapshot(uint8_t *s)
 
 static void apply(const uint8_t *s)          /* everything but on / off and the caught loop */
 {
-    static const uint8_t max[DC_NPARAM] = { 1, 255, DC_CLOCKS - 1, 1, 1, 255, 255, 255, 2, 255, 255, 255, 255, 255,
-                                            DC_SHAPES - 1, 1, 255, 255, 255 };
+    static const uint8_t max[DC_NPARAM] = DC_MAXES;
     unsigned i;
     for (i = 0; i < DC_NPARAM; i++)
-        if (i != DC_ON && i != DC_CATCH) set(i, s[i] > max[i] ? max[i] : s[i]);
+        if (!live_only(i)) set(i, s[i] > max[i] ? max[i] : s[i]);
     volume = s[DC_NPARAM];
 }
 
@@ -88,16 +102,25 @@ static int changed(void)
     unsigned i;
     if (!(st.used & (1u << preset))) return 1;
     snapshot(now);
-    for (i = 0; i < SNAP; i++) if (i != DC_ON && i != DC_CATCH && now[i] != st.slot[preset][i]) return 1;
+    for (i = 0; i < SNAP; i++) if (!live_only(i) && now[i] != st.slot[preset][i]) return 1;
     return 0;
 }
 
 void dc_ui_restore(void)
 {
+    static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
     uint8_t b[sizeof st];
-    unsigned i;
-    if (dc_persist_load(b, sizeof b) != sizeof st || b[0] != 1) return;     /* nothing (valid) stored yet */
-    for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
+    unsigned i, k, n = dc_persist_load(b, sizeof b);
+    if (n == sizeof st && b[0] == 2) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
+    else if (n == 4u + DC_SLOTS * (V1_N + 1u) && b[0] == 1) {           /* 1.0 / 1.1 presets: new settings at defaults */
+        for (i = 0; i < 4; i++) ((uint8_t *)&st)[i] = b[i];
+        st.version = 2;
+        for (k = 0; k < DC_SLOTS; k++) {
+            const uint8_t *o = b + 4 + k * (V1_N + 1u);
+            for (i = 0; i < DC_NPARAM; i++) st.slot[k][i] = (uint8_t)(i < V1_N ? o[i] : def[i]);
+            st.slot[k][DC_NPARAM] = o[V1_N];
+        }
+    } else return;                                                       /* nothing (valid) stored yet */
     preset = hl = st.last < DC_SLOTS ? st.last : 0;
     if (st.used & (1u << preset)) apply(st.slot[preset]);
 }
@@ -134,8 +157,28 @@ void dc_ui_turn(int detents)
     hl = preset;                             /* PRESET opens on the loaded slot */
 }
 
-/* foot: the looper only, at once: catch / let go */
-static void foot_press(void) { set(DC_CATCH, !val[DC_CATCH]); }
+/* foot, the looper only. Listening: a press catches at once (the loop runs silently while the foot is down);
+ * a tap plays it, holding instead freezes the wet channel until release (and listens again). Loop playing:
+ * a tap lets it go; holding overdubs until release. */
+static void foot_press(void)
+{
+    if (!val[DC_CATCH]) { set(DC_CATCH, 2); foot_mode = 1; }
+    else foot_mode = 2;
+}
+static void foot_hold(void)
+{
+    if (foot_mode == 1) { set(DC_CATCH, 0); set(DC_FREEZE, 1); foot_mode = 3; }
+    else if (foot_mode == 2) { set(DC_OVERDUB, 1); foot_mode = 4; }
+}
+static void foot_release(unsigned held)
+{
+    (void)held;
+    if (foot_mode == 1) set(DC_CATCH, 1);
+    else if (foot_mode == 2) set(DC_CATCH, 0);
+    else if (foot_mode == 3) set(DC_FREEZE, 0);
+    else if (foot_mode == 4) set(DC_OVERDUB, 0);
+    foot_mode = 0;
+}
 
 /* PARA held 3 s: the effect on / off. The looper is left as it is (while off, the output is the dry signal). */
 static void para_hold(void) { set(DC_ON, !val[DC_ON]); }
@@ -175,7 +218,8 @@ void dc_ui_para_up(void) { btn_edge(&para, 0, 0); }
 void dc_ui_tick(void)
 {
     btn_tick(&para, 0, para_hold, para_release);
-    btn_tick(&foot, foot_press, 0, 0);
+    btn_tick(&foot, foot_press, 0, foot_release);
+    if (foot.down && foot.held == FOOT_HOLD) foot_hold();
     if (saved_ticks) saved_ticks--;
 }
 
@@ -217,7 +261,10 @@ int dc_ui_take(uint32_t *id, uint32_t *value)
 
 unsigned dc_ui_level(void) { return volume; }
 unsigned dc_ui_on(void) { return val[DC_ON]; }
-unsigned dc_ui_caught(void) { return val[DC_CATCH]; }
+unsigned dc_ui_caught(void)
+{
+    return val[DC_OVERDUB] && val[DC_CATCH] == 1 ? 2u : val[DC_FREEZE] ? 3u : val[DC_CATCH] == 1;
+}
 unsigned dc_ui_live(void) { return live; }
 unsigned dc_ui_sel(void) { return sel; }
 unsigned dc_ui_count(void) { return I_N; }
@@ -263,6 +310,7 @@ static const char *const clk_name[DC_CLOCKS] = { "1.4K", "2.1K", "2.8K", "4.1K",
 static const char *const shape_name[DC_SHAPES] = { "SINE", "SQUARE", "RAMP", "SAW", "RND SIN", "RND SQR", "ENV" };
 static const char *const tape_name[8] = { "REV 4X", "REV 2X", "REV 1X", "REV.5X", "0.5X", "1X", "2X", "4X" };
 static const char *const route_name[3] = { "IN", "IN+LOOP", "LOOP" };
+static const char *const scale_name[DC_SCALES] = { "OCT UP", "OCT DN", "OCTAVES", "5TH+OCT", "HARMONY" };
 
 static char *str(char *p, const char *s) { while (*s) *p++ = *s++; return p; }
 static char *num(char *p, unsigned v)
@@ -366,6 +414,13 @@ void dc_ui_value(char *v)
         }
         break;
     case I_ROUTE: p = str(p, route_name[x]); break;
+    case I_GRAIN: p = ms_at_clock(p, exp2q(256u, x * 1285u)); break;
+    case I_SCALE: p = str(p, scale_name[x]); break;
+    case I_PITCH: case I_REVERSE: case I_STUTTER:
+        if (!x) p = str(p, "OFF"); else p = pct(p, x, 255);
+        break;
+    case I_TONE: if (x == 255u) p = str(p, "OPEN"); else p = pct(p, x, 255); break;
+    case I_FADE: if (!x) p = str(p, "REPLACE"); else p = pct(p, x, 255); break;
     default: p = pct(p, x, 255); break;                       /* MIX, VOLUME, SMEAR, DEPTH, LOOP LV */
     }
     *p = 0;

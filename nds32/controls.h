@@ -5,9 +5,10 @@
 /* Dreamcatcher's controls. No hardware in here: the platform feeds knob and switch events in and sends what
  * dc_take() hands out to the DSP. Also built on the computer (test/presets_test.c, test/ui_mock.c).
  *
- *   turn PARA     choose a setting (grouped: MAIN, WET, MOD, COLOR, LOOP)
+ *   turn PARA     choose a setting (grouped: MAIN, WET, GRAIN, MOD, COLOR, LOOP)
  *   volume knob   changes the chosen setting once it is turned a little; until then the setting keeps its value
- *   foot switch   catch a micro-loop / let it go (the looper only)
+ *   foot switch   tap: catch a micro-loop / let it go. Hold while a loop plays: overdub; hold while
+ *                 listening: freeze the wet channel (both until release)
  *   click PARA    save the sound into the active preset; on PRESET (MAIN) with another slot highlighted by the
  *                 volume knob: load that slot (an empty one: save the sound there)
  *   hold PARA 3 s effect on / off (the looper is left as it is)
@@ -16,7 +17,7 @@
  */
 #define DC_SLOTS 8
 
-enum { SEC_MAIN, SEC_WET, SEC_MOD, SEC_COLOR, SEC_LOOP, SEC_N };
+enum { SEC_MAIN, SEC_WET, SEC_GRAIN, SEC_MOD, SEC_COLOR, SEC_LOOP, SEC_N };
 
 void dc_ui_init(void);
 void dc_ui_turn(int detents);
@@ -34,7 +35,7 @@ int dc_ui_take(uint32_t *id, uint32_t *value);  /* next setting for the DSP; 0 =
 unsigned dc_ui_level(void);                     /* output level 0..255 */
 
 unsigned dc_ui_on(void);
-unsigned dc_ui_caught(void);
+unsigned dc_ui_caught(void);                    /* 0 listening, 1 loop, 2 overdub, 3 freeze */
 unsigned dc_ui_live(void);                      /* the chosen setting follows the knob */
 unsigned dc_ui_sel(void);
 unsigned dc_ui_count(void);
