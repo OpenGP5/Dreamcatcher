@@ -1,9 +1,12 @@
 #include "controls.h"
 #include "../params.h"
+#include "../dsp/sync.h"
 
 #define NO_DSP 255u
+#define BPM_MIN 40u
+#define BPM_N 201u                           /* BPM 40..240: the knob's steps */
 #define ID_PRESET 254u
-enum { I_PRESET, I_MIX, I_CLOCK, I_VOLUME, I_TIME, I_SMEAR, I_TONE, I_CHANCE, I_GLITCH,
+enum { I_PRESET, I_MIX, I_CLOCK, I_SYNC, I_BPM, I_VOLUME, I_TIME, I_SMEAR, I_TONE, I_CHANCE, I_GLITCH,
        I_GRAIN, I_PITCH, I_SCALE, I_REVERSE, I_STUTTER, I_RATE, I_DEPTH, I_SHAPE, I_MOD,
        I_DISSOLVE, I_FILTER, I_LMODE, I_LENGTH, I_MOTION, I_LOOPLV, I_FADE, I_ROUTE,
        I_RDECAY, I_RMIX, I_RSIZE, I_RPREDLY, I_RMOD, I_RSHIMMER, I_N };
@@ -12,6 +15,8 @@ static const struct { const char *name; uint8_t sec, id; uint16_t n; } item[I_N]
     { "PRESET",   SEC_MAIN,  ID_PRESET,   DC_SLOTS },
     { "MIX",      SEC_MAIN,  DC_MIX,      256 },
     { "CLOCK",    SEC_MAIN,  DC_CLOCK,    DC_CLOCKS },
+    { "SYNC",     SEC_MAIN,  DC_SYNC,     2 },
+    { "BPM",      SEC_MAIN,  DC_BPM,      BPM_N },
     { "VOLUME",   SEC_MAIN,  NO_DSP,      256 },
     { "TIME",     SEC_WET,   DC_TIME,     256 },
     { "SMEAR",    SEC_WET,   DC_SMEAR,    256 },
@@ -48,13 +53,14 @@ static uint32_t val[DC_NPARAM];
 static unsigned volume, sel, live, have_knob, knob_ref, last_knob, knob_now;
 static uint64_t dirty;                       /* bit = DSP parameter id (more than 32 of them) */
 
-/* presets: what is stored (dc_persist_*), version 4 (1.2: 34 settings, and a name per slot). Older ones are migrated
- * on load: version 1 (1.0 / 1.1) had 19 settings, version 2 (1.2 before the reverb) 28, version 3 no names. */
+/* presets: what is stored (dc_persist_*), version 5 (1.4: 36 settings with SYNC and BPM, and a name per slot). Older
+ * ones are migrated on load, the settings they lack at their defaults (SYNC off): version 4 (1.2 / 1.3) had 34
+ * settings and names, version 3 the same without names, version 2 (1.2 before the reverb) 28, version 1 (1.0 / 1.1) 19. */
 #define SNAP (DC_NPARAM + 1u)                /* every setting's value, then VOLUME */
 #define V1_N 19u                             /* settings in a version 1 slot */
 #define V2_N 28u                             /* settings in a version 2 slot */
+#define V4_N 34u                             /* settings in a version 3 or 4 slot */
 static struct { uint8_t version, last, used, spare; uint8_t slot[DC_SLOTS][SNAP]; char name[DC_SLOTS][DC_NAME_LEN]; } st;
-#define V3_SIZE (4u + DC_SLOTS * SNAP)          /* a version 3 record: the same, without the names */
 static unsigned preset, hl;                  /* the loaded slot; the slot PRESET highlights */
 static unsigned saved_ticks, save_err, loaded;   /* the message after a click: SAVED / LOADED, for saved_ticks */
 #define HOLD 300u                            /* 3 s: holding PARA turns the effect on / off */
@@ -85,7 +91,7 @@ void dc_ui_init(void)
     for (i = 0; i < DC_NPARAM; i++) val[i] = def[i];
     volume = 255; sel = I_PRESET; live = have_knob = knob_ref = last_knob = 0; dirty = 0;
     for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = 0;
-    st.version = 4; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
+    st.version = 5; preset = hl = 0; saved_ticks = save_err = 0; foot_mode = 0;
     for (i = 0; i < sizeof para; i++) { ((uint8_t *)&para)[i] = 0; ((uint8_t *)&foot)[i] = 0; }
     para.since_up = foot.since_up = DEBOUNCE;
 }
@@ -123,21 +129,19 @@ static void restore(int keep_sound)
     static const uint32_t def[DC_NPARAM] = DC_DEFAULTS;
     uint8_t b[sizeof st], before[SNAP];
     unsigned i, k, n = dc_persist_load(b, sizeof b), was = preset, had = (st.used >> preset) & 1u;
-    unsigned old = 0;                                                    /* settings in the stored version's slots */
+    static const uint8_t old_n[5] = { 0, V1_N, V2_N, V4_N, V4_N };   /* settings in a slot, versions 1..4 */
+    unsigned ver = n ? b[0] : 0u, old = 0, names = 0;
     for (i = 0; i < SNAP; i++) before[i] = st.slot[was][i];
-    if (n == sizeof st && b[0] == 4) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
-    else if (n == V3_SIZE && b[0] == 3) {                                /* 1.2 before names */
-        for (i = 0; i < V3_SIZE; i++) ((uint8_t *)&st)[i] = b[i];
-        for (k = 0; k < DC_SLOTS; k++) for (i = 0; i < DC_NAME_LEN; i++) st.name[k][i] = 0;
-        st.version = 4;
-    }
-    else if (n == 4u + DC_SLOTS * (V2_N + 1u) && b[0] == 2) old = V2_N;  /* 1.2 before the reverb */
-    else if (n == 4u + DC_SLOTS * (V1_N + 1u) && b[0] == 1) old = V1_N;  /* 1.0 / 1.1 */
-    else return;                                                         /* nothing (valid) stored yet */
-    if (old) {                               /* new settings at their defaults, except: no reverb (they sound as saved) */
+    if (n == sizeof st && ver == 5u) for (i = 0; i < sizeof st; i++) ((uint8_t *)&st)[i] = b[i];
+    else if (ver >= 1u && ver <= 4u) {
+        old = old_n[ver]; names = ver == 4u;
+        if (n != 4u + DC_SLOTS * (old + 1u) + (names ? DC_SLOTS * DC_NAME_LEN : 0u)) return;   /* not a valid record */
+    } else return;                                                       /* nothing (valid) stored yet */
+    if (old) {                               /* new settings at their defaults; no reverb before version 3 (as saved) */
+        const uint8_t *nm = b + 4 + DC_SLOTS * (old + 1u);
         for (i = 0; i < 4; i++) ((uint8_t *)&st)[i] = b[i];
-        st.version = 4;
-        for (k = 0; k < DC_SLOTS; k++) for (i = 0; i < DC_NAME_LEN; i++) st.name[k][i] = 0;
+        st.version = 5;
+        for (k = 0; k < DC_SLOTS; k++) for (i = 0; i < DC_NAME_LEN; i++) st.name[k][i] = names ? (char)nm[k * DC_NAME_LEN + i] : 0;
         for (k = 0; k < DC_SLOTS; k++) {
             const uint8_t *o = b + 4 + k * (old + 1u);
             for (i = 0; i < DC_NPARAM; i++) st.slot[k][i] = (uint8_t)(i < old ? o[i] : i == DC_RMIX ? 0u : def[i]);
@@ -283,6 +287,7 @@ void dc_ui_knob(unsigned knob)
     last_knob = knob;
     saved_ticks = 0;
     v = n == 256 ? knob : knob * n / 256u;
+    if (item[sel].id == DC_BPM) v += BPM_MIN;
     if (item[sel].id == NO_DSP) volume = v;
     else if (item[sel].id == ID_PRESET) hl = v;      /* highlight only: PARA loads it */
     else set(item[sel].id, v);
@@ -299,7 +304,7 @@ int dc_ui_param_get(uint32_t id, uint32_t *value)
     case DC_P_USED: *value = st.used; return 1;
     case DC_P_CHANGED: *value = (uint32_t)changed(); return 1;
     case DC_P_SAVE: *value = 0; return 1;
-    case DC_P_FORMAT: *value = 4; return 1;
+    case DC_P_FORMAT: *value = 5; return 1;
     default: return 0;
     }
 }
@@ -382,6 +387,7 @@ unsigned dc_ui_frac(void)
     unsigned n = item[sel].n;
     if (saved_ticks) return 255;
     if (para_counting()) return (para.held - HOLD_SHOW) * 255u / (HOLD - HOLD_SHOW);
+    if (item[sel].id == DC_BPM) return (cur() - BPM_MIN) * 255u / (BPM_N - 1u);
     return n == 256 ? cur() : cur() * 255u / (n - 1u);
 }
 
@@ -431,7 +437,20 @@ static char *hz(char *p, uint32_t f)
     *p++ = 'K'; return p;
 }
 
-unsigned dc_ui_rate_x100(void) { return exp2q(5u, val[DC_RATE] * 2032u); }
+/* SYNC on: the note value a TIME / RATE / LENGTH / GRAIN setting picks (dsp/sync.h, as the engine does) */
+static unsigned sync_bpm(void) { return val[DC_BPM] < BPM_MIN ? BPM_MIN : val[DC_BPM]; }
+static unsigned sync_index(unsigned kind, unsigned x)
+{
+    unsigned c = val[DC_CLOCK];
+    return dc_sync_note(kind, x, sync_bpm(), (float)clk_num[c] / (float)clk_den[c]);
+}
+static const char *sync_name(unsigned kind, unsigned x) { return dc_note[sync_index(kind, x)].name; }
+
+unsigned dc_ui_rate_x100(void)               /* the LFO rate (synced: BPM / 60 / the note's beats) */
+{
+    if (val[DC_SYNC]) return (unsigned)((float)sync_bpm() * (100.0f / 60.0f) / dc_note_beats(sync_index(DC_SYNC_RATE, val[DC_RATE])) + 0.5f);
+    return exp2q(5u, val[DC_RATE] * 2032u);
+}
 
 void dc_ui_value(char *v)
 {
@@ -450,7 +469,9 @@ void dc_ui_value(char *v)
         else { unsigned n = slot_name(p, x); if (n) p += n; else { *p++ = 'P'; *p++ = (char)('1' + x); } if (changed()) *p++ = '*'; }
         break;
     case I_CLOCK: p = str(p, clk_name[x]); break;
-    case I_TIME: {
+    case I_SYNC: p = str(p, x ? "SYNC" : "FREE"); break;
+    case I_BPM: p = num(p, x); p = str(p, " BPM"); break;
+    case I_TIME: if (val[DC_SYNC]) { p = str(p, sync_name(DC_SYNC_TIME, x)); break; } {
         uint32_t steps = exp2q(200u, x * 2056u);                  /* dream.h: 200 * 2^(8 x / 255), DC_DMAX */
         if (steps > 51136u) steps = 51136u;
         p = ms_at_clock(p, steps); break;
@@ -467,7 +488,7 @@ void dc_ui_value(char *v)
         else if (x < 128u) p = str(p, "DOUBLE");
         else { p = str(p, "RND "); p = pct(p, x - 128u, 127); }
         break;
-    case I_RATE: {
+    case I_RATE: if (val[DC_SYNC]) { p = str(p, sync_name(DC_SYNC_RATE, x)); break; } {
         unsigned f = dc_ui_rate_x100();
         if (f < 100u) { p = str(p, "0."); *p++ = (char)('0' + f / 10u); *p++ = (char)('0' + f % 10u); }
         else if (f < 1000u) { p = num(p, f / 100u); *p++ = '.'; p = num(p, f / 10u % 10u); }
@@ -493,6 +514,7 @@ void dc_ui_value(char *v)
         break;
     case I_LMODE: p = str(p, x ? "STRETCH" : "TAPE"); break;
     case I_LENGTH:
+        if (val[DC_SYNC] && !val[DC_LMODE]) { p = str(p, sync_name(DC_SYNC_LENGTH, x)); break; }
         p = ms_at_clock(p, val[DC_LMODE] ? exp2q(256u, x * 1285u) : exp2q(4060u, x * 1028u));
         break;
     case I_MOTION:
@@ -506,7 +528,7 @@ void dc_ui_value(char *v)
         }
         break;
     case I_ROUTE: p = str(p, route_name[x]); break;
-    case I_GRAIN: p = ms_at_clock(p, exp2q(256u, x * 1285u)); break;
+    case I_GRAIN: if (val[DC_SYNC]) p = str(p, sync_name(DC_SYNC_GRAIN, x)); else p = ms_at_clock(p, exp2q(256u, x * 1285u)); break;
     case I_SCALE: p = str(p, scale_name[x]); break;
     case I_PITCH: case I_REVERSE: case I_STUTTER:
         if (!x) p = str(p, "OFF"); else p = pct(p, x, 255);

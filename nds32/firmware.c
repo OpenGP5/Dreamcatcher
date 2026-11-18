@@ -64,10 +64,11 @@ void fw_tick(void)                                         /* every 10 ms */
 
 int fw_draw(int force)
 {
-    static uint8_t secs[32];
+    static uint8_t secs[64];                         /* (34 settings in 1.4: room to grow) */
     unsigned i, n = dc_ui_count();
     ui_state_t s;
-    for (i = 0; i < n && i < 32; i++) secs[i] = (uint8_t)dc_ui_section(i);
+    if (n > 64u) n = 64u;
+    for (i = 0; i < n; i++) secs[i] = (uint8_t)dc_ui_section(i);
     s.name = dc_ui_name();
     dc_ui_value(s.value);
     s.frac = (uint8_t)dc_ui_frac();

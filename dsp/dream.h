@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include "gp5_math.h"
 #include "../params.h"
+#include "sync.h"
 
 /* The pedal's DSP runs code straight from SPI flash; this loop is too big for its fetch cache and measured
  * ~5 cycles per instruction there (110 % load). Everything that runs per sample is therefore placed in RAM:
@@ -89,6 +90,7 @@ typedef struct {
 
     /* chance, glitch, LFO */
     float lfo_ph, lfo, rprev, rnext, env;
+    float beat, beat_step, sync_cycle;      /* sync: beats since the clock wrapped, per sample; beats per LFO cycle */
     float tin, tfb, gin, gfb;               /* gate targets and their ramps */
     float gm, crm;                          /* glitch: engine clock multiplier, crush multiplier */
 
@@ -162,7 +164,7 @@ static __attribute__((unused)) void dc_init(dc_t *s, dc_large_t *L)
     for (i = 0; i < DC_NPARAM; i++) s->p[i] = def[i];
     s->rnd = 0x2545F491u;
     s->sage[0] = s->sage[1] = 1e9f;
-    s->dcur = 4410.0f; s->gm = 1.0f; s->crm = 1.0f;
+    s->dcur = 4410.0f; s->gm = 1.0f; s->crm = 1.0f; s->beat = 0.0f; s->sync_cycle = 0.0f;
     s->duck = 1.0f; s->tone_a = 1.0f; s->fade = 1.0f;
     s->tin = s->gin = 1.0f;
     s->fc = 19000.0f;
@@ -513,6 +515,22 @@ static void dc_targets(dc_t *s)
     else if (f <= 135) { s->fmode = 0; s->fc_t = 19000.0f; }                                   /* open */
     else { s->fmode = 1; s->fc_t = 20.0f * exp2f((float)(f - 136) * (6.97f / 119.0f)); }       /* 20 Hz .. 2.5 kHz */
     s->grain = exp2f(8.0f + 5.0f * (float)s->p[DC_GRAIN] * (1.0f / 255.0f));   /* 256 .. 8192 steps */
+    s->sync_cycle = 0.0f;
+    if (s->p[DC_SYNC]) {                                     /* 1.4: note values of BPM (sync.h), what fits only */
+        unsigned bpm = s->p[DC_BPM] < 40u ? 40u : s->p[DC_BPM];
+        s->dtarget = dc_note_steps(dc_sync_note(DC_SYNC_TIME, s->p[DC_TIME], bpm, s->r), bpm, s->r);
+        if (s->dtarget > (float)DC_DMAX) s->dtarget = (float)DC_DMAX;
+        if (!s->p[DC_LMODE]) {
+            s->tape_len = dc_note_steps(dc_sync_note(DC_SYNC_LENGTH, s->p[DC_LENGTH], bpm, s->r), bpm, s->r);
+            if (s->tape_len > (float)DC_LFULL) s->tape_len = (float)DC_LFULL;
+        }
+        s->grain = dc_note_steps(dc_sync_note(DC_SYNC_GRAIN, s->p[DC_GRAIN], bpm, s->r), bpm, s->r);
+        if (s->grain < 256.0f) s->grain = 256.0f;
+        if (s->grain > 8192.0f) s->grain = 8192.0f;
+        s->sync_cycle = dc_note_beats(dc_sync_note(DC_SYNC_RATE, s->p[DC_RATE], bpm, s->r));
+        s->beat_step = (float)bpm / 60.0f / DC_FS;
+        s->rate_hz = (float)bpm / 60.0f / s->sync_cycle;
+    }
     s->ppitch = (float)s->p[DC_PITCH] * (1.0f / 255.0f);
     s->prev = (float)s->p[DC_REVERSE] * (1.0f / 255.0f);
     s->pstut = (float)s->p[DC_STUTTER] * (1.0f / 255.0f);
@@ -560,8 +578,18 @@ static DC_HOT_INLINE void dc_run(dc_t *s, const int32_t *in, int32_t *out_l, int
         /* LFO + chance */
         float a = fabsf(dry);
         s->env += (a - s->env) * (a > s->env ? 0.01f : 0.0003f);
-        s->lfo_ph += s->rate_hz * s->gm * (1.0f / DC_FS);
-        if (s->lfo_ph >= 1.0f) { s->lfo_ph -= 1.0f; dc_new_cycle(s); }
+        if (s->sync_cycle > 0.0f) {                          /* sync: the cycle follows the beat clock, in phase */
+            float ph;
+            s->beat += s->beat_step;
+            if (s->beat >= DC_SYNC_WRAP) s->beat -= DC_SYNC_WRAP;
+            ph = s->beat / s->sync_cycle;
+            ph -= (float)(int32_t)ph;
+            if (ph < s->lfo_ph) dc_new_cycle(s);
+            s->lfo_ph = ph;
+        } else {
+            s->lfo_ph += s->rate_hz * s->gm * (1.0f / DC_FS);
+            if (s->lfo_ph >= 1.0f) { s->lfo_ph -= 1.0f; dc_new_cycle(s); }
+        }
         if (s->p[DC_SHAPE] == 6) { s->tin = s->env > env_thr ? 1.0f : 0.0f; s->tfb = 0.0f; }
         s->lfo += (dc_lfo_shape(s) - s->lfo) * 0.02f;
         s->gin += (s->tin - s->gin) * 0.005f;

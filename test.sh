@@ -2,6 +2,7 @@
 # Checks on the computer, no pedal: the sound engine at every setting's extremes and at random (finite, bounded
 # output, exact bypass), and the screen code with sanitizers, rendering mock-ups to build/screens.png.
 set -euo pipefail
+export ASAN_OPTIONS=abort_on_error=0      # a memory error is reported and fails the test, without a crash report
 cd "$(dirname "$0")"
 P=${OPENGP5:-opengp5}/platform                 # OPENGP5=<an OpenGP5 checkout>: test against another platform
 mkdir -p build

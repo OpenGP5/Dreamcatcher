@@ -181,6 +181,21 @@ int main(void)
         check(same, "two-chip split = one processor");
         check(worst < 1e-6, "the link's Q30 words lose nothing audible");
     }
+    /* sync (1.4): the delay, the tape loop and the grain land on note values of BPM; the LFO stays in phase with the beat */
+    dc_init(&s, &big);                                       /* (a fresh engine: the random run left anything set) */
+    dc_set(&s, DC_SYNC, 1); dc_set(&s, DC_BPM, 120); dc_set(&s, DC_CLOCK, 10); dc_set(&s, DC_TIME, 255);
+    dc_set(&s, DC_RATE, 140);                                /* 1/4: one cycle a beat */
+    dc_set(&s, DC_LMODE, 0); dc_set(&s, DC_LENGTH, 255); dc_set(&s, DC_GRAIN, 255);
+    run(3000, 0, "sync: 120 BPM");
+    printf("sync: delay %.0f steps, tape %.0f, grain %.1f, LFO %.3f Hz, phase %.4f vs beat %.4f\n",
+           s.dcur, s.tape_len, s.grain, s.rate_hz, s.lfo_ph, s.beat - (float)(int)s.beat);
+    check(s.dtarget == 44100.0f && fabsf(s.dcur - s.dtarget) < 10.0f, "synced delay = a half note at 120 BPM (1 s, the longest that fits)");
+    check(fabsf(s.tape_len - 44100.0f) < 1.0f, "synced tape loop = a half note");
+    check(fabsf(s.grain - 5512.5f) < 1.0f, "synced grain = a 1/16 (125 ms)");
+    check(fabsf(s.rate_hz - 2.0f) < 1e-4f, "synced LFO: a quarter note at 120 BPM = 2 Hz");
+    check(fabsf(s.lfo_ph - (s.beat - (float)(int)s.beat)) < 1e-3f, "synced LFO in phase with the beat");
+    dc_set(&s, DC_SYNC, 0);
+
     printf(fails ? "%d FAILED\n" : "ALL OK\n", fails);
     return fails != 0;
 }

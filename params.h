@@ -41,6 +41,9 @@ enum {
     DC_RPREDLY,   /* 0..255 pre-delay 0 .. 200 ms                                                 */
     DC_RMOD,      /* 0..255 drift in the tail                                                     */
     DC_RSHIMMER,  /* 0..255 octave-up feedback into the reverb                                    */
+    /* 1.4: sync (dsp/sync.h): TIME, RATE, LENGTH (TAPE) and GRAIN as note values of BPM               */
+    DC_SYNC,      /* 0 free, 1 synced to BPM                                                       */
+    DC_BPM,       /* 40..240 beats a minute                                                        */
     DC_NPARAM
 };
 
@@ -83,7 +86,9 @@ enum {
     P(RSIZE,    "Size",     "Reverb", 0, 255, 180, GP5_U_NONE,            GP5_P_DSP)                              \
     P(RPREDLY,  "Pre-delay", "Reverb", 0, 255, 20, GP5_U_NONE,            GP5_P_DSP)                              \
     P(RMOD,     "Reverb mod", "Reverb", 0, 255, 80, GP5_U_NONE,           GP5_P_DSP)                              \
-    P(RSHIMMER, "Shimmer",  "Reverb", 0, 255, 0, GP5_U_NONE,              GP5_P_DSP)
+    P(RSHIMMER, "Shimmer",  "Reverb", 0, 255, 0, GP5_U_NONE,              GP5_P_DSP)                              \
+    C(SYNC,     "Sync",     "Main",   2, "Free|Sync", 0,                  0)                                      \
+    P(BPM,      "BPM",      "Main",   40, 240, 120, GP5_U_NONE,           0)
 
 /* Live access from the computer (OpenGP5 0.5.4: USB 7E 10 set / 7E 11 read; nds32/controls.c dc_ui_param_*):
  * ids 0 .. DC_NPARAM - 1 are the settings above (CATCH, FREEZE and OVERDUB are the foot's: read only); and */
@@ -101,9 +106,9 @@ enum {
 
 /* largest value of each setting */
 #define DC_MAXES { 1, 255, DC_CLOCKS - 1, 2, 1, 255, 255, 255, 2, 255, 255, 255, 255, 255, DC_SHAPES - 1, 1, 255, 255, \
-                   255, 255, 255, DC_SCALES - 1, 255, 255, 255, 255, 1, 1, 255, 255, 255, 255, 255, 255 }
+                   255, 255, 255, DC_SCALES - 1, 255, 255, 255, 255, 1, 1, 255, 255, 255, 255, 255, 255, 1, 240 }
 
 /* defaults: a gentle ambient patch, effect on */
 #define DC_DEFAULTS { 1, 128, 10, 0, 0, 255, 160, 200, 1, 150, 150, 128, 70, 60, 0, 0, 128, 85, 110, \
-                      170, 0, 3, 0, 0, 255, 230, 0, 0, 150, 70, 180, 20, 80, 0 }
+                      170, 0, 3, 0, 0, 255, 230, 0, 0, 150, 70, 180, 20, 80, 0, 0, 120 }
 #endif

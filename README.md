@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.3.0, on OpenGP5 0.7.0-alpha.
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.4.0, on OpenGP5 0.7.0-alpha.
 The first full firmware made with the OpenGP5 platform, and the first to use both of the pedal's processors for
 sound: the engine runs on the control processor (with its controls and screen), the DSP keeps the dry signal and
 the final mix.
@@ -46,25 +46,27 @@ of chance" light.
 | MAIN | PRESET | slot 1 … 8, highlighted with the knob, loaded with a click of PARA; a bumped knob never changes the sound (`P3` = active, `P3*` = changed since saved, `LOAD P3` = highlighted, `3 EMPTY` = nothing saved). A preset holds every setting and VOLUME, not on / off or a caught loop. The pedal starts on the last slot you loaded or saved |
 | | MIX | dry only … both full (middle) … wet only |
 | | CLOCK | 1.4 kHz … 44 kHz in musical steps. The engine rate of both halves: lower = longer loops and delays, more grit. Changing it while a loop plays shifts the loop's pitch in harmonised steps |
+| | SYNC | `FREE`, or `SYNC`: TIME, RATE, LENGTH (TAPE) and GRAIN become note values of BPM (`1/8.`, `1/4T`, `1 BAR` …), and the LFO keeps in step with the beat. Each offers only the values that fit at the tempo and CLOCK: a lower CLOCK makes room for longer ones |
+| | BPM | 40 … 240, the tempo SYNC follows. SYNC and BPM are saved with each preset |
 | | VOLUME | output level |
-| WET | TIME | delay time, 4 ms … 1.16 s at 44 kHz (up to 37 s at lower CLOCK) |
+| WET | TIME | delay time, 4 ms … 1.16 s at 44 kHz (up to 37 s at lower CLOCK). With SYNC: 1/32 … 1 bar |
 | | SMEAR | diffusion and feedback: clean echoes … dense reverb |
 | | TONE | darkens the repeats each time they go round (low-pass in the feedback); `OPEN` at the top |
 | | CHANCE | below noon: chance per LFO cycle that something enters the delay (half the time new input, half the time the old output, fed back). Noon: input always enters (`ALWAYS`). Above noon: input always, plus a growing chance of feeding the old output back (`FB`, up to sound-on-sound) |
 | | GLITCH | below noon: delay + LFO clock at HALF, NORMAL or DOUBLE speed (octave jumps). Above noon: a growing chance (`RND`) that each LFO cycle picks a new clock and crush rate at random |
-| GRAIN | GRAIN | size of the grains that read the delay, 6 ms … 186 ms at 44 kHz. Every grain may be pitched, reversed or repeated |
+| GRAIN | GRAIN | size of the grains that read the delay, 6 ms … 186 ms at 44 kHz. Every grain may be pitched, reversed or repeated. With SYNC: 1/64 … 1/16 |
 | | PITCH | chance that a grain is pitched to an interval of SCALE. Fed back, the pitched repeats stack into a shimmer |
 | | SCALE | the intervals: OCT UP, OCT DN, OCTAVES, 5TH+OCT (fifth up, fourth down, octaves), HARMONY (minor / major third, fourth, fifth, minor seventh, octave, and a fourth and octave down) |
 | | REVERSE | chance that a grain plays backwards |
 | | STUTTER | chance that a grain repeats the one before it, instead of moving on |
-| MOD | RATE | LFO rate, 0.05 … 12 Hz; also how often CHANCE decides |
+| MOD | RATE | LFO rate, 0.05 … 12 Hz; also how often CHANCE decides. With SYNC: one cycle per 1/32 … 4 bars |
 | | DEPTH | modulation depth |
 | | SHAPE | SINE, SQUARE, RAMP, SAW, RND SIN, RND SQR, ENV. With ENV your playing's loudness opens the delay instead of the LFO, and CHANCE becomes SENSE (sensitivity) |
 | | MOD | TREMOLO or VIBRATO on the wet channel |
 | COLOR | DISSOLVE | below noon: sample-rate crush (LOFI, bit loss in the lower half); noon CLEAN; above noon: the delay plays backwards, then at 1/2, 1/4, 1/8 speed (REV 1X, REV/2 …) |
 | | FILTER | below noon low-pass 150 Hz … 13 kHz, noon OPEN, above noon high-pass 20 Hz … 2.5 kHz |
 | LOOP | MODE | TAPE or STRETCH |
-| | LENGTH | TAPE: loop length, 1/16 … all of the memory (1.47 s at 44 kHz, 47 s at 1.4 kHz). STRETCH: slice size |
+| | LENGTH | TAPE: loop length, 1/16 … all of the memory (1.47 s at 44 kHz, 47 s at 1.4 kHz); with SYNC 1/8 … 4 bars. STRETCH: slice size |
 | | SPEED / DRIFT | TAPE (SPEED): REV 4X … REV 0.5X, 0.5X … 4X. STRETCH (DRIFT): how fast the slices move: backwards … FROZEN (noon) … forwards; the ends are unstretched |
 | | LOOP LV | level of the loop itself |
 | | FADE | overdub: how much of the loop stays each pass, `REPLACE` … 100 % |
