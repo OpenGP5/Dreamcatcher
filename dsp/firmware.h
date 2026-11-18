@@ -3,12 +3,10 @@
  * guitar over the audio link and mixes what comes back with the dry signal (dc_mix): the dry path and the exact
  * bypass stay here, with no added delay. The hall reverb (hall.h) runs here too, on the effect's share, before
  * that mix. Words: link_words.h. Link commands:
- *   0x7F10 set:  [10 7f][0c 00][id u32][value u32] -> ACK   (ON, MIX and the reverb's six matter here; all are
- *                acknowledged)
+ *   0x7F10:      the platform's: parameters (OpenGP5 1.0; ON, MIX and the reverb's six come here, to fw_param)
  *   0x7F11 get:  [11 7f][len][ON][MIX][cycles last block][cycles worst block][late blocks][blocks without the
  *                control processor's words]   (all u32) */
-#define GP5_AUDIO_LINK
-#define GP5_LINK_WORDS 136u                /* 129 used (link_words.h); a multiple of 8 */
+/* The audio link (136 words: 129 used, link_words.h) is switched on in ../firmware.json (OpenGP5 1.0). */
 #include "dream.h"
 #include "link_words.h"
 #include "hall.h"
@@ -45,18 +43,17 @@ static void fw_process(const int32_t *in, int32_t *out_left, int32_t *out_right)
     lo[LW_MAGIC] = (int32_t)LW_MAGIC_D;
 }
 
+/* the DSP's parameters (../params.h, GP5_P_DSP): on / off, mix and the reverb; the platform clamps them */
+static void fw_param(uint32_t id, int32_t v)
+{
+    if (id == DC_ON) p_on = (uint32_t)v;
+    if (id == DC_MIX) p_mix = (uint32_t)v;
+    if (id >= DC_RDECAY && id <= DC_RSHIMMER) hl_set(&hall, id - DC_RDECAY, (uint32_t)v);
+}
+
 static int fw_command(uint32_t cmd, const uint8_t *p, uint32_t n)
 {
-    static const uint8_t max[DC_NPARAM] = DC_MAXES;
-    if (cmd == 0x7F10 && n >= 12) {
-        uint32_t id = gp5_get32(p + 4), v = gp5_get32(p + 8);
-        if (id < DC_NPARAM && v > max[id]) v = max[id];
-        if (id == DC_ON) p_on = v;
-        if (id == DC_MIX) p_mix = v;
-        if (id >= DC_RDECAY && id <= DC_RSHIMMER) hl_set(&hall, id - DC_RDECAY, v);
-        gp5_ack();
-        return 1;
-    }
+    (void)p; (void)n;
     if (cmd == 0x7F11) {
         uint32_t v[6] = { p_on, p_mix, GP5_CYCLES_LAST, GP5_CYCLES_WORST, GP5_LATE_BLOCKS, missed };
         uint8_t r[4 + 4 * 6] = { 0x11, 0x7F, (uint8_t)sizeof r, 0 };

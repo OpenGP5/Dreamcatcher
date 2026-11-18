@@ -50,4 +50,7 @@ unsigned dc_ui_frac(void);                      /* its position in its range, 0.
 unsigned dc_ui_rate_x100(void);                 /* LFO rate in 1/100 Hz (for the pulse on the screen) */
 unsigned dc_ui_preset(void);                    /* 0..DC_SLOTS-1 */
 unsigned dc_ui_overlay(void);                   /* 1 while the screen shows saving (name/value/frac say what) */
+/* implemented by the firmware (firmware.c; the tests have their own): a setting changed here (the pedal's controls,
+ * a preset, the computer); the engine and the platform's parameters follow */
+void dc_on_set(unsigned id, uint32_t value);
 #endif

@@ -44,6 +44,47 @@ enum {
     DC_NPARAM
 };
 
+/* OpenGP5 1.0 parameters (opengp5/platform/dsp/gp5_params.h): the same settings, in the same order (so the ids
+ * are DC_*), described for the computer and delivered to the DSP by the platform. Dreamcatcher keeps its own presets
+ * (nds32/controls.c, store record "DRMC"), so none of them is GP5_P_PRESET / GP5_P_SAVE. The DSP uses ON, MIX and
+ * the reverb; the rest is the engine's, on the control processor. 0..255 settings show as numbers on a computer
+ * (their texts depend on other settings, e.g. TIME on CLOCK: Launchpad's live editor has its own). */
+#define GP5_PARAMS(P, C)                                                                                         \
+    C(ON,       "Effect",   "Main",   2, "Off|On", 1,                     GP5_P_DSP)                              \
+    P(MIX,      "Mix",      "Main",   0, 255, 128, GP5_U_NONE,            GP5_P_DSP)                              \
+    P(CLOCK,    "Clock",    "Main",   0, 10, 10, GP5_U_NONE,              0)                                      \
+    C(CATCH,    "Catch",    "Loop",   3, "Listening|Looping|Caught", 0,   GP5_P_READONLY)                         \
+    C(LMODE,    "Mode",     "Loop",   2, "Tape|Stretch", 0,               0)                                      \
+    P(LENGTH,   "Length",   "Loop",   0, 255, 255, GP5_U_NONE,            0)                                      \
+    P(MOTION,   "Speed",    "Loop",   0, 255, 160, GP5_U_NONE,            0)                                      \
+    P(LOOPLV,   "Loop level", "Loop", 0, 255, 200, GP5_U_NONE,            0)                                      \
+    C(ROUTE,    "Route",    "Loop",   3, "In|In+Loop|Loop", 1,            0)                                      \
+    P(TIME,     "Time",     "Wet",    0, 255, 150, GP5_U_NONE,            0)                                      \
+    P(SMEAR,    "Smear",    "Wet",    0, 255, 150, GP5_U_NONE,            0)                                      \
+    P(CHANCE,   "Chance",   "Wet",    0, 255, 128, GP5_U_NONE,            0)                                      \
+    P(RATE,     "Rate",     "Mod",    0, 255, 70, GP5_U_NONE,             0)                                      \
+    P(DEPTH,    "Depth",    "Mod",    0, 255, 60, GP5_U_NONE,             0)                                      \
+    C(SHAPE,    "Shape",    "Mod",    7, "Sine|Square|Ramp|Saw|Rnd sin|Rnd sqr|Env", 0, 0)              \
+    C(MODTYPE,  "Mod type", "Mod",    2, "Tremolo|Vibrato", 0,            0)                                      \
+    P(DISSOLVE, "Dissolve", "Color",  0, 255, 128, GP5_U_NONE,            0)                                      \
+    P(GLITCH,   "Glitch",   "Wet",    0, 255, 85, GP5_U_NONE,             0)                                      \
+    P(FILTER,   "Filter",   "Color",  0, 255, 110, GP5_U_NONE,            0)                                      \
+    P(GRAIN,    "Grain",    "Grain",  0, 255, 170, GP5_U_NONE,            0)                                      \
+    P(PITCH,    "Pitch",    "Grain",  0, 255, 0, GP5_U_NONE,              0)                                      \
+    C(SCALE,    "Scale",    "Grain",  5, "Oct up|Oct down|Octaves|5th+oct|Harmony", 3, 0)                         \
+    P(REVERSE,  "Reverse",  "Grain",  0, 255, 0, GP5_U_NONE,              0)                                      \
+    P(STUTTER,  "Stutter",  "Grain",  0, 255, 0, GP5_U_NONE,              0)                                      \
+    P(TONE,     "Tone",     "Wet",    0, 255, 255, GP5_U_NONE,            0)                                      \
+    P(FADE,     "Fade",     "Loop",   0, 255, 230, GP5_U_NONE,            0)                                      \
+    C(FREEZE,   "Freeze",   "Loop",   2, "Off|On", 0,                     GP5_P_READONLY)                         \
+    C(OVERDUB,  "Overdub",  "Loop",   2, "Off|On", 0,                     GP5_P_READONLY)                         \
+    P(RDECAY,   "Decay",    "Reverb", 0, 255, 150, GP5_U_NONE,            GP5_P_DSP)                              \
+    P(RMIX,     "Reverb mix", "Reverb", 0, 255, 70, GP5_U_NONE,           GP5_P_DSP)                              \
+    P(RSIZE,    "Size",     "Reverb", 0, 255, 180, GP5_U_NONE,            GP5_P_DSP)                              \
+    P(RPREDLY,  "Pre-delay", "Reverb", 0, 255, 20, GP5_U_NONE,            GP5_P_DSP)                              \
+    P(RMOD,     "Reverb mod", "Reverb", 0, 255, 80, GP5_U_NONE,           GP5_P_DSP)                              \
+    P(RSHIMMER, "Shimmer",  "Reverb", 0, 255, 0, GP5_U_NONE,              GP5_P_DSP)
+
 /* Live access from the computer (OpenGP5 0.5.4: USB 7E 10 set / 7E 11 read; nds32/controls.c dc_ui_param_*):
  * ids 0 .. DC_NPARAM - 1 are the settings above (CATCH, FREEZE and OVERDUB are the foot's: read only); and */
 #define DC_P_VOLUME  0x100u               /* output level 0..255 (VOLUME on the pedal)                          */

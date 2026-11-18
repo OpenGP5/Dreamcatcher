@@ -26,6 +26,15 @@ void gp5_blit(unsigned x, unsigned y, unsigned w, unsigned h, const uint16_t *px
     for (unsigned j = 0; j < h; j++) for (unsigned i = 0; i < w; i++) fb[(y + j) * W + x + i] = px[j * w + i];
 }
 void gp5_text(unsigned line, const char *s) { (void)line; (void)s; }
+/* the platform's 1.0 calls (OpenGP5 gp5_firmware.h, gp5_params.h), in memory */
+static unsigned mock_knob, mock_level, mock_led;
+unsigned gp5_knob(void) { return mock_knob; }
+void gp5_level_own(int own) { (void)own; }
+void gp5_level_set(unsigned level) { mock_level = level; }
+void gp5_led(uint32_t c) { mock_led = c; }
+static int32_t mock_param[64];
+int gp5_param_set(unsigned id, int32_t v) { int ch = mock_param[id] != v; mock_param[id] = v; return ch; }
+int32_t gp5_param(unsigned id) { return mock_param[id]; }
 /* the sound engine (engine.c) runs on the pedal only; here the settings it would get are just counted */
 static unsigned engine_sets;
 void dc_engine_start(void) {}
@@ -33,7 +42,8 @@ void dc_engine_set(uint32_t id, uint32_t v) { (void)id; (void)v; engine_sets++; 
 
 static void shot(unsigned knob)
 {
-    for (int f = 1; fw_draw(knob, f); f = 0) {}
+    mock_knob = knob;
+    for (int f = 1; fw_draw(f); f = 0) {}
     for (unsigned i = 0; i < W * H; i++) {
         unsigned v = fb[i], r = (v >> 11) << 3, g = ((v >> 5) & 63) << 2, b = (v & 31) << 3;
         shots[nshots][3 * i] = (uint8_t)(r | r >> 5); shots[nshots][3 * i + 1] = (uint8_t)(g | g >> 6);
@@ -49,6 +59,7 @@ static void chunk(FILE *f, const char *t, const uint8_t *d, uint32_t n)
     uint32_t c = crc32(0, (const uint8_t *)t, 4); c = crc32(c, d, n); put32(f, c);
 }
 
+static void fw_knob(unsigned v) { mock_knob = v; fw_tick(); }      /* (0.6's name: the knob, then the 10 ms tick) */
 static void knob_to(unsigned v) { fw_knob(v); fw_knob(v); }
 static void turn_to(unsigned item) { while (dc_ui_sel() != item) fw_para_turn(1); }
 static void ticks(unsigned n, unsigned knob) { while (n--) fw_knob(knob); }
@@ -63,24 +74,24 @@ int main(int argc, char **argv)
 {
     fw_init();
     knob_to(200); shot(200);                            /* start: PRESET, slot 1 empty */
-    fw_para_push(); ticks(5, 200); fw_para_release(); ticks(5, 200); shot(200);   /* click: SAVED P1 */
+    fw_para_down(); ticks(5, 200); fw_para_up(); ticks(5, 200); shot(200);   /* click: SAVED P1 */
     turn_to(1); knob_to(200); fw_knob(150); shot(150);  /* MIX follows the knob (gold) */
     turn_to(0); ticks(200, 150); shot(150);             /* PRESET again: P1* (changed since saved) */
-    knob_to(150); fw_knob(60); ticks(5, 60); fw_para_push(); ticks(5, 60); fw_para_release(); ticks(160, 60);  /* slot 2 */
+    knob_to(150); fw_knob(60); ticks(5, 60); fw_para_down(); ticks(5, 60); fw_para_up(); ticks(160, 60);  /* slot 2 */
     fw_knob(10); ticks(5, 10); shot(10);                /* knob highlights slot 1: LOAD P1 (a click loads it) */
     turn_to(4); knob_to(150); fw_knob(210); shot(210);  /* TIME */
     turn_to(14); ticks(300, 210); shot(210);            /* RATE, pulse fading */
     turn_to(18); knob_to(90); fw_knob(230); shot(230);  /* DISSOLVE reverse */
-    fw_foot(); ticks(5, 230); fw_foot_release(); ticks(5, 230); turn_to(22); shot(230);   /* loop caught, SPEED */
+    fw_foot_down(); ticks(5, 230); fw_foot_up(); ticks(5, 230); turn_to(22); shot(230);   /* loop caught, SPEED */
     turn_to(20); knob_to(60); fw_knob(240); turn_to(22); knob_to(240); fw_knob(100); shot(100);  /* STRETCH, DRIFT */
-    fw_para_push(); ticks(160, 100); shot(100);         /* holding PARA: OFF IN, countdown */
-    ticks(150, 100); fw_para_release(); ticks(5, 100); turn_to(2); shot(100);   /* off (loop still caught); CLOCK */
-    fw_para_push(); ticks(320, 100); fw_para_release(); ticks(5, 100);           /* on again */
+    fw_para_down(); ticks(160, 100); shot(100);         /* holding PARA: OFF IN, countdown */
+    ticks(150, 100); fw_para_up(); ticks(5, 100); turn_to(2); shot(100);   /* off (loop still caught); CLOCK */
+    fw_para_down(); ticks(320, 100); fw_para_up(); ticks(5, 100);           /* on again */
     turn_to(11); knob_to(100); fw_knob(200); shot(200); /* SCALE: 5TH+OCT */
-    fw_foot(); ticks(60, 200); turn_to(24); shot(200);  /* holding the foot while the loop plays: DUB; FADE */
-    fw_foot_release(); ticks(5, 200); fw_foot(); ticks(5, 200); fw_foot_release(); ticks(5, 200);   /* let go */
-    fw_foot(); ticks(60, 200); turn_to(10); shot(200);  /* holding the foot while listening: FREEZE; PITCH */
-    fw_foot_release(); ticks(5, 200);
+    fw_foot_down(); ticks(60, 200); turn_to(24); shot(200);  /* holding the foot while the loop plays: DUB; FADE */
+    fw_foot_up(); ticks(5, 200); fw_foot_down(); ticks(5, 200); fw_foot_up(); ticks(5, 200);   /* let go */
+    fw_foot_down(); ticks(60, 200); turn_to(10); shot(200);  /* holding the foot while listening: FREEZE; PITCH */
+    fw_foot_up(); ticks(5, 200);
     turn_to(26); knob_to(120); fw_knob(255); shot(255); /* REVERB DECAY at the top: HOLD */
     turn_to(31); knob_to(255); fw_knob(160); shot(160); /* REVERB SHIMMER */
     {   /* preset names (version 4): a short one, and a 12-character one in the smaller font */

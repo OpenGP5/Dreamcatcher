@@ -10,6 +10,7 @@ unsigned dc_persist_load(void *dst, unsigned max) { memcpy(dst, store, store_len
 int dc_persist_save(const void *src, unsigned len) { memcpy(store, src, len); store_len = len; saves++; return 0; }
 
 static uint32_t dsp[DC_NPARAM];
+void dc_on_set(unsigned id, uint32_t value) { (void)id; (void)value; }   /* (firmware.c's: the engine and the platform) */
 static void drain(void) { uint32_t id, v; while (dc_ui_take(&id, &v)) dsp[id] = v; }
 static void ticks(unsigned n) { while (n--) dc_ui_tick(); }
 static void knob(unsigned v) { dc_ui_knob(v); dc_ui_knob(v); }

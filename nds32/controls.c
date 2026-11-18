@@ -75,7 +75,7 @@ static unsigned foot_mode;                   /* 0 up; 1 pressed while listening;
 
 static void set(unsigned id, uint32_t v)
 {
-    if (val[id] != v) { val[id] = v; dirty |= 1ull << id; }
+    if (val[id] != v) { val[id] = v; dirty |= 1ull << id; dc_on_set(id, v); }   /* the engine and the platform hear it */
 }
 
 void dc_ui_init(void)

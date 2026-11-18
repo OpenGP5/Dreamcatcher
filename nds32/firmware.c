@@ -1,6 +1,7 @@
 /* Dreamcatcher, control half (platform interface: opengp5/platform/nds32/gp5_firmware.h).
  * The controls are controls.c, the screen ui.c, the sound engine.c; this file connects them to the platform. */
 #include "gp5_firmware.h"
+#include "gp5_params.h"                                    /* (includes ../params.h: GP5_PARAMS, the DC_* ids) */
 #include "../params.h"
 #include "controls.h"
 #include "ui.h"
@@ -13,38 +14,47 @@ static unsigned ticks;             /* 10 ms ticks since start-up (the screen's s
 #define STORE_ID 0x434D5244u                               /* "DRMC" */
 unsigned dc_persist_load(void *dst, unsigned max) { return gp5_store_load(STORE_ID, dst, max); }
 int dc_persist_save(const void *src, unsigned len) { return gp5_store_save(STORE_ID, src, len); }
-const char *fw_name(void) { return "dreamcatcher"; }   /* the name Launchpad and the storage claim see */
+/* (its id, "dreamcatcher", which owns the storage, is in ../firmware.json) */
 /* The computer (OpenGP5 Launchpad) rewrote the presets: load them again, starting on its "last" slot. */
-int fw_store_changed(uint32_t id) { if (id != STORE_ID) return 0; dc_ui_reload(); return 1; }
+void fw_storage_changed(void) { dc_ui_reload(); }
 
-void fw_init(void) { dc_engine_start(); dc_ui_init(); dc_ui_restore(); }   /* start on the last-used preset */
-void fw_foot(void) { dc_ui_foot_down(); }                  /* catch / let go of a micro-loop */
-void fw_foot_release(void) { dc_ui_foot_up(); }
-void fw_para_push(void) { dc_ui_para_down(); }             /* click: save / load a preset; hold 3 s: on / off */
-void fw_para_release(void) { dc_ui_para_up(); }
-void fw_para_turn(int detents) { dc_ui_turn(detents); }    /* choose the setting */
-unsigned fw_level(void) { return dc_ui_level(); }
-void fw_dsp_ready(void) { dc_ui_resend_all(); }
-/* Each setting goes to the sound engine here (engine.c) and, as before, to the DSP, which uses ON and MIX for the
- * final mix and acknowledges all of them (the platform waits for that at start-up). */
-int fw_take(uint32_t *id, uint32_t *value)
+/* A setting changed in controls.c: the engine (here) and the platform's parameters (the DSP's go to the DSP) */
+void dc_on_set(unsigned id, uint32_t value)
 {
-    if (!dc_ui_take(id, value)) return 0;
-    dc_engine_set(*id, *value);
-    return 1;
+    dc_engine_set(id, value);
+    gp5_param_set(id, (int32_t)value);
 }
-unsigned fw_setting_count(void) { return DC_NPARAM; }
-/* live access from the computer (OpenGP5 0.5.4, USB 7E 10 / 7E 11): params.h, DC_P_* */
+/* The computer set a parameter (OpenGP5 1.0, 7E 10): through the controls, as from the pedal */
+void fw_param_changed(unsigned id) { dc_ui_param_set(id, (uint32_t)gp5_param(id)); }
+
+void fw_init(void)
+{
+    unsigned i;
+    uint32_t v;
+    dc_engine_start(); dc_ui_init(); dc_ui_restore();      /* start on the last-used preset */
+    for (i = 0; i < DC_NPARAM; i++) if (dc_ui_param_get(i, &v)) dc_on_set(i, v);   /* everything, once */
+    gp5_level_own(1);                                       /* VOLUME is part of a preset: the knob takes it over */
+}
+void fw_foot_down(void) { dc_ui_foot_down(); }             /* catch / let go of a micro-loop (its own timing) */
+void fw_foot_up(void) { dc_ui_foot_up(); }
+void fw_para_down(void) { dc_ui_para_down(); }             /* click: save / load a preset; hold 3 s: on / off */
+void fw_para_up(void) { dc_ui_para_up(); }
+void fw_para_turn(int detents) { dc_ui_turn(detents); }    /* choose the setting */
+/* live access from the computer beyond the parameters (Launchpad's live editor): VOLUME, PRESET, USED, CHANGED,
+ * SAVE, FORMAT (params.h, DC_P_*, ids 0x100..). The parameters themselves (ids 0..33) are the platform's. */
 int fw_param_get(uint32_t id, uint32_t *value) { return dc_ui_param_get(id, value); }
 int fw_param_set(uint32_t id, uint32_t value) { return dc_ui_param_set(id, value); }
 /* LEDs: magenta-violet when on (red and blue full, a touch of green: the LEDs' blue is strong, so the
  * screen's violet linearised looked blue on the pedal); dim red when off. */
-unsigned fw_active(void) { return dc_ui_on() ? GP5_LED(32, 2, 32) : 0; }
+static uint32_t led_now = 99;
+static void led_update(void) { uint32_t c = dc_ui_on() ? GP5_LED_RGB(32, 2, 32) : GP5_LED_BYPASS; if (c != led_now) { led_now = c; gp5_led(c); } }
 
-void fw_knob(unsigned knob)
+void fw_tick(void)                                         /* every 10 ms */
 {
-    dc_ui_knob(knob);
+    dc_ui_knob(gp5_knob());
     dc_ui_tick();
+    gp5_level_set(dc_ui_level());
+    led_update();
     ticks++;
     /* The pulse follows the RATE setting (not the DSP's glitch jumps): a flash at each cycle, then a fade. */
     pulse_ph += dc_ui_rate_x100();
@@ -52,7 +62,7 @@ void fw_knob(unsigned knob)
     else if (pulse_age < 100) pulse_age++;
 }
 
-int fw_draw(unsigned knob, int force)
+int fw_draw(int force)
 {
     static uint8_t secs[32];
     unsigned i, n = dc_ui_count();
@@ -61,7 +71,7 @@ int fw_draw(unsigned knob, int force)
     s.name = dc_ui_name();
     dc_ui_value(s.value);
     s.frac = (uint8_t)dc_ui_frac();
-    s.knob = (uint8_t)knob;
+    s.knob = (uint8_t)gp5_knob();
     s.live = (uint8_t)(dc_ui_live() || dc_ui_overlay());     /* gold while saving, too */
     s.on = (uint8_t)dc_ui_on();
     s.caught = (uint8_t)dc_ui_caught();
