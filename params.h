@@ -12,7 +12,7 @@ enum {
     DC_LMODE,     /* 0 TAPE, 1 STRETCH                                                            */
     DC_LENGTH,    /* 0..255: TAPE loop length 1/16 .. all; STRETCH slice size                     */
     DC_MOTION,    /* 0..255: TAPE speed REV 4X .. 4X (8 steps); STRETCH: rev .. frozen (128) .. fwd */
-    DC_LOOPLV,    /* 0..255 loop level (direct)                                                   */
+    DC_LOOPLV,    /* 0..255 loop level: direct, and into the wet channel                          */
     DC_ROUTE,     /* 0 IN, 1 IN+LOOP, 2 LOOP: what the wet channel processes                      */
     DC_TIME,      /* 0..255 delay time (engine steps, exponential)                                */
     DC_SMEAR,     /* 0..255 diffusion + feedback: echo .. reverb                                  */

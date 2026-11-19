@@ -10,7 +10,7 @@
  *                 vibrato; a state-variable filter ends the chain.
  *
  * CLOCK sets the engine rate of both halves (MOOD's idea): lower = longer loops, longer delays, grittier.
- * ROUTE sends the input, the loop, or both through the wet channel.
+ * ROUTE sends the input, the loop, or both through the wet channel; LOOP LEVEL sets the loop's level in both places.
  *
  * 1.2: the delay is read by two overlapping GRAINS. Each new grain may be pitched to an interval of SCALE
  * (PITCH), play backwards (REVERSE) or repeat the grain before (STUTTER); the grains are fed back, so pitched
@@ -596,7 +596,9 @@ static DC_HOT_INLINE void dc_run(dc_t *s, const int32_t *in, int32_t *out_l, int
         s->gfb += (s->tfb - s->gfb) * 0.005f;
 
         /* wet channel input by ROUTE */
-        float win = s->p[DC_ROUTE] == 0 ? dry : s->p[DC_ROUTE] == 1 ? dry + loop : (s->lgain > 0.5f ? loop : dry);
+        /* the loop at LOOP LEVEL, here as on the output: turned down, it feeds the effects less too (owner, 2026-11-19) */
+        float lsend = loop * looplv;
+        float win = s->p[DC_ROUTE] == 0 ? dry : s->p[DC_ROUTE] == 1 ? dry + lsend : (s->lgain > 0.5f ? lsend : dry);
         s->dacc += win; s->dcnt++;
         s->dph += r * s->gm;
         while (s->dph >= 1.0f) {
@@ -653,7 +655,7 @@ static DC_HOT_INLINE void dc_run(dc_t *s, const int32_t *in, int32_t *out_l, int
         /* the effect's share of the output: the wet channel at its MIX gain, the loop on top */
         s->mix += (mix_t - s->mix) * 0.003f;
         float wg = s->mix > 0.5f ? 1.0f : 2.0f * s->mix;
-        float direct = loop * looplv;
+        float direct = lsend;
         float el = wg * dc_soft(w2[0]) + direct, er = wg * dc_soft(w2[1]) + direct;
         if (wet_l) { wet_l[i] = el; wet_r[i] = er; }           /* two-chip build: the DSP mixes (dc_mix) */
         else dc_mix(&s->mx, s->p[DC_ON], s->p[DC_MIX], in[i], el, er, &out_l[i], &out_r[i]);
