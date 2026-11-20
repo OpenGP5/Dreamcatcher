@@ -1,6 +1,6 @@
 # Dreamcatcher
 
-**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.4.0, on OpenGP5 0.7.0-alpha.
+**An ambient texture firmware for the Valeton GP-5, built on [OpenGP5](https://github.com/OpenGP5/OpenGP5).** Version 1.4.0, on OpenGP5 0.8.0-alpha.
 The first full firmware made with the OpenGP5 platform, and the first to use both of the pedal's processors for
 sound: the engine runs on the control processor (with its controls and screen), the DSP keeps the dry signal and
 the final mix.
@@ -68,7 +68,7 @@ of chance" light.
 | LOOP | MODE | TAPE or STRETCH |
 | | LENGTH | TAPE: loop length, 1/16 … all of the memory (1.47 s at 44 kHz, 47 s at 1.4 kHz); with SYNC 1/8 … 4 bars. STRETCH: slice size |
 | | SPEED / DRIFT | TAPE (SPEED): REV 4X … REV 0.5X, 0.5X … 4X. STRETCH (DRIFT): how fast the slices move: backwards … FROZEN (noon) … forwards; the ends are unstretched |
-| | LOOP LV | level of the loop itself |
+| | LOOP LV | level of the loop: its own sound and what it feeds the effects (ROUTE In+Loop or Loop) |
 | | FADE | overdub: how much of the loop stays each pass, `REPLACE` … 100 % |
 | | ROUTE | what the wet channel processes: IN (the guitar; loop in parallel), IN+LOOP, LOOP (the loop while it plays) |
 | REVERB | DECAY | 0.3 s … 27 s; at the top `HOLD`: the tail sustains and new playing doesn't enter |
@@ -121,7 +121,7 @@ python3 opengp5/tools/dsp_emu_check.py build/GP-5_dreamcatcher.bin   # the built
 | `nds32/controls.c` | the controls, settings, value texts and presets (stored with OpenGP5's `gp5_store_save`) |
 | `nds32/ui.c` | the purple 160 x 80 screen, drawn in bands |
 | `nds32/firmware.c` | connects controls and screen to the OpenGP5 control platform; the LFO pulse |
-| `opengp5/` | the platform, a git submodule pinned to a tested release (0.7.0-alpha) |
+| `opengp5/` | the platform, a git submodule pinned to a tested release (0.8.0-alpha) |
 
 Every setting is an OpenGP5 parameter, so a computer can list, read and change them live (OpenGP5 Launchpad,
 `gp5_link.py params`; the ids are in `params.h`, with `DC_P_*` past them for VOLUME, loading and saving presets). Presets made
