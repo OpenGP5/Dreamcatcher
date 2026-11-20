@@ -1,0 +1,45 @@
+name: Bug
+description: Something in Dreamcatcher doesn't work or sound as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If the pedal doesn't start after a flash, try [recovery](https://opengp5.github.io/docs/get-started/recovery/) first. Problems with Launchpad's Presets page are welcome here too.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: "1. Set CLOCK to 8.3K\n2. Catch a loop\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dreamcatcher version, and Launchpad's if you used it
+      placeholder: "Dreamcatcher 1.4.0, Launchpad 0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      multiple: true
+      options: [The sound, The looper, Presets, Tempo sync, The screen or controls, Launchpad's Presets page, Building]
+  - type: input
+    id: system
+    attributes:
+      label: Your computer's system
+      placeholder: macOS 15, Windows 11, Ubuntu 24.04 ...
+  - type: textarea
+    id: log
+    attributes:
+      label: Output, log or screenshots
+      description: "For a sound problem, the settings you used help most (export the preset from Launchpad). Launchpad's **Developer** page has the pedal's log (**Save the log**), or a photo of the screen."
+      render: text
