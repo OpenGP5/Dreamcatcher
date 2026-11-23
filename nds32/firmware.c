@@ -35,6 +35,31 @@ void fw_init(void)
     for (i = 0; i < DC_NPARAM; i++) if (dc_ui_param_get(i, &v)) dc_on_set(i, v);   /* everything, once */
     gp5_level_own(1);                                       /* VOLUME is part of a preset: the knob takes it over */
 }
+/* MIDI, over USB or Bluetooth (any channel): Program Change 0..7 loads presets 1..8; a controller sets a setting.
+ * The controllers are MIDI's undefined ones, one per setting in params.h's order: 20..31, 85..90, 102..119
+ * (README.md has the list). The value 0..127 covers the setting's whole range. */
+static int cc_setting(unsigned cc)
+{
+    if (cc >= 20u && cc <= 31u) return (int)(cc - 20u);
+    if (cc >= 85u && cc <= 90u) return (int)(cc - 85u) + 12;
+    if (cc >= 102u && cc <= 119u) return (int)(cc - 102u) + 18;
+    return -1;
+}
+
+void fw_midi(const uint8_t *m, unsigned n)
+{
+    unsigned st = m[0] & 0xF0u;
+    if (st == 0xC0u && n >= 2u) (void)dc_ui_load_preset(m[1]);
+    else if (st == 0xB0u && n >= 3u) {
+        int id = cc_setting(m[1]);
+        if (id >= 0 && id < GP5_NPARAMS) {
+            const gp5_param_desc_t *d = &gp5_param_table[id];
+            int32_t v = d->min + ((int32_t)m[2] * (d->max - d->min) + 63) / 127;
+            if (!(d->flags & GP5_P_READONLY)) (void)dc_ui_param_set((uint32_t)id, (uint32_t)v);
+        }
+    }
+}
+
 void fw_foot_down(void) { dc_ui_foot_down(); }             /* catch / let go of a micro-loop (its own timing) */
 void fw_foot_up(void) { dc_ui_foot_up(); }
 void fw_para_down(void) { dc_ui_para_down(); }             /* click: save / load a preset; hold 3 s: on / off */

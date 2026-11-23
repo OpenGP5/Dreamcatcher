@@ -115,6 +115,61 @@ Seven sections, 34 settings: **MAIN** (preset, mix, clock, tempo sync, volume), 
 
 </details>
 
+## Bluetooth and MIDI
+
+Dreamcatcher is a Bluetooth MIDI device (OpenGP5 1.0): pair **GP-5** from a phone or tablet app, or from a Mac
+(Audio MIDI Setup › Window › Show MIDI Studio › Bluetooth). The same MIDI works over USB.
+
+- **Program Change 0–7** loads presets 1–8 (an empty slot is ignored).
+- **Controllers** set the settings, one controller each, value 0–127 over the setting's whole range, on any
+  channel. Only MIDI's undefined controllers are used, so a controller's other messages (bank select, mod wheel,
+  sustain) don't change anything.
+- Launchpad works over Bluetooth too (editing, presets, backups); firmware updates need the USB cable.
+
+<details>
+<summary>The controllers</summary>
+
+| CC | Setting | Group |
+|---|---|---|
+| 20 | Effect | Main |
+| 21 | Mix | Main |
+| 22 | Clock | Main |
+| 23 | Catch | Loop (the foot switch's: not set by MIDI) |
+| 24 | Mode | Loop |
+| 25 | Length | Loop |
+| 26 | Speed | Loop |
+| 27 | Loop level | Loop |
+| 28 | Route | Loop |
+| 29 | Time | Wet |
+| 30 | Smear | Wet |
+| 31 | Chance | Wet |
+| 85 | Rate | Mod |
+| 86 | Depth | Mod |
+| 87 | Shape | Mod |
+| 88 | Mod type | Mod |
+| 89 | Dissolve | Color |
+| 90 | Glitch | Wet |
+| 102 | Filter | Color |
+| 103 | Grain | Grain |
+| 104 | Pitch | Grain |
+| 105 | Scale | Grain |
+| 106 | Reverse | Grain |
+| 107 | Stutter | Grain |
+| 108 | Tone | Wet |
+| 109 | Fade | Loop |
+| 110 | Freeze | Loop (the foot switch's: not set by MIDI) |
+| 111 | Overdub | Loop (the foot switch's: not set by MIDI) |
+| 112 | Decay | Reverb |
+| 113 | Reverb mix | Reverb |
+| 114 | Size | Reverb |
+| 115 | Pre-delay | Reverb |
+| 116 | Reverb mod | Reverb |
+| 117 | Shimmer | Reverb |
+| 118 | Sync | Main |
+| 119 | BPM | Main |
+
+</details>
+
 ## What's new
 
 | Version | Changes |

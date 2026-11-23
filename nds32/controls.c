@@ -178,6 +178,15 @@ static void load_preset(unsigned p)          /* PARA tap on PRESET: the highligh
     saved_ticks = 150; loaded = 1; save_err = 0;
 }
 
+/* MIDI Program Change (firmware.c): load preset p (0..7) if it holds a sound; 1 = loaded */
+int dc_ui_load_preset(unsigned p)
+{
+    if (p >= DC_SLOTS || !(st.used & (1u << p))) return 0;
+    load_preset(p);
+    hl = p;
+    return 1;
+}
+
 static void save_preset(unsigned p)
 {
     preset = hl = p;
