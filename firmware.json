@@ -6,8 +6,7 @@
   "url": "https://github.com/OpenGP5/Dreamcatcher",
   "licence": "MIT",
   "description": "Ambient looper, glitch delay with grains and pitch shifting, and reverb. 8 presets.",
-  "platform": "0.8",
+  "platform": "1.0",
   "audio": { "link_words": 136 },
-  "bluetooth": true,
-  "usb_audio": true
+  "bluetooth": true
 }
