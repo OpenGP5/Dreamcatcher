@@ -90,7 +90,8 @@ typedef struct {
 
     /* chance, glitch, LFO */
     float lfo_ph, lfo, rprev, rnext, env;
-    float beat, beat_step, sync_cycle;      /* sync: beats since the clock wrapped, per sample; beats per LFO cycle */
+    float beat, sync_cycle;                 /* sync: beats since the clock wrapped; beats per LFO cycle */
+    uint32_t beat_acc, beat_bpm;            /* the beat clock, exact: + BPM each sample, a beat every DC_BEAT_UNITS */
     float tin, tfb, gin, gfb;               /* gate targets and their ramps */
     float gm, crm;                          /* glitch: engine clock multiplier, crush multiplier */
 
@@ -164,7 +165,7 @@ static __attribute__((unused)) void dc_init(dc_t *s, dc_large_t *L)
     for (i = 0; i < DC_NPARAM; i++) s->p[i] = def[i];
     s->rnd = 0x2545F491u;
     s->sage[0] = s->sage[1] = 1e9f;
-    s->dcur = 4410.0f; s->gm = 1.0f; s->crm = 1.0f; s->beat = 0.0f; s->sync_cycle = 0.0f;
+    s->dcur = 4410.0f; s->gm = 1.0f; s->crm = 1.0f; s->beat = 0.0f; s->beat_acc = 0; s->beat_bpm = 120; s->sync_cycle = 0.0f;
     s->duck = 1.0f; s->tone_a = 1.0f; s->fade = 1.0f;
     s->tin = s->gin = 1.0f;
     s->fc = 19000.0f;
@@ -528,7 +529,7 @@ static void dc_targets(dc_t *s)
         if (s->grain < 256.0f) s->grain = 256.0f;
         if (s->grain > 8192.0f) s->grain = 8192.0f;
         s->sync_cycle = dc_note_beats(dc_sync_note(DC_SYNC_RATE, s->p[DC_RATE], bpm, s->r));
-        s->beat_step = (float)bpm / 60.0f / DC_FS;
+        s->beat_bpm = bpm;
         s->rate_hz = (float)bpm / 60.0f / s->sync_cycle;
     }
     s->ppitch = (float)s->p[DC_PITCH] * (1.0f / 255.0f);
@@ -580,8 +581,11 @@ static DC_HOT_INLINE void dc_run(dc_t *s, const int32_t *in, int32_t *out_l, int
         s->env += (a - s->env) * (a > s->env ? 0.01f : 0.0003f);
         if (s->sync_cycle > 0.0f) {                          /* sync: the cycle follows the beat clock, in phase */
             float ph;
-            s->beat += s->beat_step;
-            if (s->beat >= DC_SYNC_WRAP) s->beat -= DC_SYNC_WRAP;
+            /* Counted in whole numbers: a float adding BPM / 60 / 44100 each sample rounded every step (near 48 beats
+             * its resolution is ~4 % of the step) and ran 0.5..0.9 % off the tempo (+0.9 beat a minute at 120 BPM). */
+            s->beat_acc += s->beat_bpm;
+            if (s->beat_acc >= DC_BEAT_WRAP) s->beat_acc -= DC_BEAT_WRAP;
+            s->beat = (float)s->beat_acc * (1.0f / (float)DC_BEAT_UNITS);
             ph = s->beat / s->sync_cycle;
             ph -= (float)(int32_t)ph;
             if (ph < s->lfo_ph) dc_new_cycle(s);

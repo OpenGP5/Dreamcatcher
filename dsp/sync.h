@@ -15,6 +15,8 @@ static const struct { uint8_t num, den; const char *name; } dc_note[DC_SYNC_NOTE
     { 3, 4, "1/8." },   { 1, 1, "1/4" },    { 4, 3, "1/2T" },  { 3, 2, "1/4." },  { 2, 1, "1/2" },
     { 3, 1, "1/2." },   { 4, 1, "1 BAR" },  { 8, 1, "2 BARS" }, { 16, 1, "4 BARS" },
 };
+#define DC_BEAT_UNITS (60u * 44100u)          /* beat clock counts per beat (it adds BPM each sample) */
+#define DC_BEAT_WRAP (48u * DC_BEAT_UNITS)     /* = DC_SYNC_WRAP beats: 127,008,000, fits in 32 bits */
 #define DC_SYNC_WRAP 48.0f                    /* beats: every note value above divides it, so the beat clock can wrap */
 
 /* what syncs; for each, the note values it may take and the engine-step range it must land in */

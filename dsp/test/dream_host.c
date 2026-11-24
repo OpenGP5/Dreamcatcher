@@ -194,6 +194,14 @@ int main(void)
     check(fabsf(s.grain - 5512.5f) < 1.0f, "synced grain = a 1/16 (125 ms)");
     check(fabsf(s.rate_hz - 2.0f) < 1e-4f, "synced LFO: a quarter note at 120 BPM = 2 Hz");
     check(fabsf(s.lfo_ph - (s.beat - (float)(int)s.beat)) < 1e-3f, "synced LFO in phase with the beat");
+    {   /* the beat clock keeps time: after 3000 blocks of 64 samples at 120 BPM, 192000 * 120 / (60 * 44100) beats
+         * (the float clock of 1.4.0 rounded each step and ran 0.7 % fast here: 0.06 beat off already) */
+        double want = 3000.0 * 64.0 * 120.0 / (60.0 * 44100.0), d;
+        while (want >= 48.0) want -= 48.0;
+        printf("sync: beat clock %.5f beats after 3000 blocks, exact %.5f\n", s.beat, want);
+        d = s.beat - want;
+        check(d < 1e-4 && d > -1e-4, "beat clock = the tempo exactly");
+    }
     dc_set(&s, DC_SYNC, 0);
 
     printf(fails ? "%d FAILED\n" : "ALL OK\n", fails);
