@@ -3,7 +3,7 @@
 <p align="center"><b>Ambient textures for the Valeton GP-5: an always-listening micro-looper, a glitch delay that smears into reverb, and grains.</b></p>
 
 <p align="center">
-  <a href="https://github.com/OpenGP5/Dreamcatcher/releases/latest"><img alt="Version 1.4.0" src="https://img.shields.io/badge/version-1.4.0-3cc0c1?style=flat-square"></a>
+  <a href="https://github.com/OpenGP5/Dreamcatcher/releases/latest"><img alt="Version 1.5.0" src="https://img.shields.io/badge/version-1.5.0-3cc0c1?style=flat-square"></a>
   <a href="https://github.com/OpenGP5/OpenGP5"><img alt="Built on OpenGP5 0.8.0-alpha" src="https://img.shields.io/badge/built%20on-OpenGP5%200.8.0--alpha-5b6b7b?style=flat-square"></a>
   <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-3ee8b5?style=flat-square"></a>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-e8590c?style=flat-square">
@@ -174,6 +174,7 @@ Dreamcatcher is a Bluetooth MIDI device (OpenGP5 1.0): pair **GP-5** from a phon
 
 | Version | Changes |
 |---|---|
+| 1.5.0 | On OpenGP5 1.0: Bluetooth MIDI (presets and every setting from a phone or computer), USB audio, the synced tempo exact |
 | 1.4.0 | Tempo sync: SYNC and BPM, with note values for TIME, RATE, LENGTH and GRAIN |
 | 1.3.0 | Preset names on the pedal; every setting is an OpenGP5 parameter, so Launchpad's editor and backups work through them |
 | 1.2.0 | Grains with pitch, reverse and stutter; overdub and freeze; the hall reverb; twice the loop and delay time (the engine moves to the control processor); every setting live from a computer |
