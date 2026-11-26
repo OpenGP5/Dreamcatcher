@@ -4,9 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/OpenGP5/Dreamcatcher/releases/latest"><img alt="Version 1.5.0" src="https://img.shields.io/badge/version-1.5.0-3cc0c1?style=flat-square"></a>
-  <a href="https://github.com/OpenGP5/OpenGP5"><img alt="Built on OpenGP5 0.8.0-alpha" src="https://img.shields.io/badge/built%20on-OpenGP5%200.8.0--alpha-5b6b7b?style=flat-square"></a>
+  <a href="https://github.com/OpenGP5/OpenGP5"><img alt="Built on OpenGP5 1.0.0" src="https://img.shields.io/badge/built%20on-OpenGP5%201.0.0-5b6b7b?style=flat-square"></a>
   <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-3ee8b5?style=flat-square"></a>
-  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-e8590c?style=flat-square">
 </p>
 
 <p align="center">
@@ -32,7 +31,7 @@ into a glitch delay that smears into reverb). It is an independent project, not 
 either company, and contains none of their code.
 
 > [!NOTE]
-> **Alpha.** Flashing custom firmware can go wrong. Read
+> **Before you flash.** Flashing custom firmware can go wrong. Read
 > [Before you flash](https://opengp5.github.io/docs/get-started/safety/) first. Installing Dreamcatcher over another
 > firmware wipes that firmware's presets and files: back them up first.
 
@@ -117,8 +116,9 @@ Seven sections, 34 settings: **MAIN** (preset, mix, clock, tempo sync, volume), 
 
 ## Bluetooth and MIDI
 
-Dreamcatcher is a Bluetooth MIDI device (OpenGP5 1.0): pair **GP-5** from a phone or tablet app, or from a Mac
-(Audio MIDI Setup › Window › Show MIDI Studio › Bluetooth). The same MIDI works over USB.
+Dreamcatcher is a Bluetooth MIDI device (OpenGP5 1.0): connect to **OpenGP5** from a phone or tablet app, the
+[phone remote](https://opengp5.github.io/remote/), or a Mac (Audio MIDI Setup › Window › Show MIDI Studio ›
+Bluetooth). Phones don't list it in their Bluetooth settings: connect from the app. The same MIDI works over USB.
 
 - **Program Change 0–7** loads presets 1–8 (an empty slot is ignored).
 - **Controllers** set the settings, one controller each, value 0–127 over the setting's whole range, on any
@@ -222,7 +222,7 @@ the hall reverb and the final mix, so the dry sound never waits for the engine.
 | `nds32/ui.c` | The purple 160 × 80 screen, drawn in bands |
 | `nds32/firmware.c` | Connects the controls and screen to the platform; the LFO pulse |
 | `firmware.json`, `params.h` | Who it is (OpenGP5 1.0, 136 audio link words) and its settings as OpenGP5 parameters |
-| `opengp5/` | The platform, a git submodule pinned to a tested release (0.8.0-alpha) |
+| `opengp5/` | The platform, a git submodule pinned to a tested release (1.0.0) |
 
 <details>
 <summary><b>Things learnt on the way</b>, useful for any OpenGP5 firmware</summary>
